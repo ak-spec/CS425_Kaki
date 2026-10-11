@@ -1,0 +1,11 @@
+# environment
+nlc_venv/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+
+# data (ESConv is academic-use only; regenerate with src/prep.py) and run outputs
+data/raw/
+data/processed/
+checkpoints/
+*.pt
