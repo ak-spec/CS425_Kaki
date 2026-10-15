@@ -56,6 +56,126 @@ supporters (about 13 against 20 words, Distinct-2 about 30 against 52), and look
 of the three. Strategy accuracy falls for look-ahead because the Critic often picks a strategy other
 than Plan's first choice, which is by design.
 
+## Baselines
+
+The proposal's baselines answered the same 1,723 histories (`src/baselines.py`): BlenderBot-small (90M),
+fine-tuned on our training split (best epoch 2 of 5 by validation loss, 16 minutes), and Qwen2.5-0.5B-Instruct
+zero-shot with the history-only prompt. Histories ending with a seeker message:
+
+| System | BLEU-2 | BLEU-4 | ROUGE-L | BERTScore F1 | Distinct-1 | Distinct-2 | Length (words) |
+|---|---|---|---|---|---|---|---|
+| Direct | 4.81 | 1.35 | 14.66 | 18.67 | 6.63 | 31.07 | 12.6 |
+| Planning | 5.18 | 1.38 | 14.87 | 18.02 | 6.52 | 29.81 | 13.6 |
+| Look-ahead | 4.95 | 1.31 | 14.76 | 18.24 | 6.95 | 31.62 | 12.8 |
+| BlenderBot-small, fine-tuned (B1) | 8.36 | 2.64 | 17.39 | 20.83 | 4.14 | 18.48 | 16.9 |
+| Qwen zero-shot (B2) | 2.57 | 0.42 | 10.89 | 9.88 | 3.40 | 23.12 | 52.6 |
+| Reference replies | | | | | 9.72 | 52.60 | 19.8 |
+
+BlenderBot-small is closer to the references than every Kaki configuration on all four overlap metrics
+(direct - BlenderBot BERTScore -2.17 [-2.92, -1.38], ROUGE-L -2.73 [-3.42, -2.07]; the same holds on all
+1,723 histories), and the least varied (Distinct-2 18.5 against about 30). Its replies are short formulas
+that ESConv supporters use often: on the handwritten queries below it answers almost every message with
+"I'm sorry to hear that. I've been in a similar situation." Zero-shot Qwen is far from the references and
+writes 53-word replies, often numbered lists of advice; fine-tuning, not model size, is what brings Qwen's
+replies close to ESConv's. The proposal's third hypothesis, that a 0.5B model would match or beat
+fine-tuned BlenderBot-small on these metrics, is not supported.
+
+Test perplexity of the reference replies (`src/perplexity.py`, Qwen tokens): zero-shot 35.1, history-only
+adapter 14.5, conditioned adapter given the reference emotion and strategy 14.2. BlenderBot-small's is 15.7
+over its own tokens and is not comparable.
+
+## Held-out Critic
+
+The Eval-Critic (trained on the other half of the training dialogues, with the reply-contrast loss)
+predicts a rating for each reply (`src/compare_configs.py --critic`). Histories ending with a seeker
+message: direct 4.61, planning 4.67, look-ahead 4.77, BlenderBot-small 4.73, zero-shot 4.66, and the human
+reference replies 4.70. Look-ahead - planning is +0.10 [+0.08, +0.12]. The Eval-Critic rates look-ahead
+above the human replies and zero-shot level with planning, so it is not a measure of helpfulness. As the
+proposal requires, a gain seen only on the Eval-Critic, and not on the reference metrics, is not counted.
+
+## Strategy controllability
+
+`src/controllability.py`. The strategy tagger (RoBERTa-base on supporter replies alone) scores 0.579
+accuracy and 0.544 macro-F1 on the test replies, so a reply that follows its strategy is tagged
+correctly only a bit more than half the time. For 200 test histories ending with a seeker message the
+conditioned adapter wrote one reply per strategy:
+
+| Requested strategy | Tagged as requested | History-only replies tagged so | Tagger on the human replies |
+|---|---|---|---|
+| Question | 0.54 | 0.08 | 0.78 |
+| Providing Suggestions | 0.57 | 0.22 | 0.71 |
+| Self-disclosure | 0.57 | 0.13 | 0.62 |
+| Reflection of feelings | 0.35 | 0.17 | 0.18 |
+| Affirmation and Reassurance | 0.34 | 0.18 | 0.44 |
+| Others | 0.31 | 0.21 | 0.58 |
+| Restatement or Paraphrasing | 0.15 | 0.01 | 0.44 |
+| Information | 0.08 | 0.03 | 0.39 |
+| All | 0.36 | | 0.57 |
+
+The strategy in the prompt changes the reply: for every strategy, replies are tagged with it more often
+than replies written without a strategy, by up to 46 points for Question. Control is partial, about
+two-thirds of what the tagger finds in human replies (0.36 against 0.57), and weakest for Information and
+Restatement. In the test run, 70% of planning replies and 56% of look-ahead replies are tagged with the
+strategy they were written for.
+
+## Simulated conversations
+
+`src/simulate.py`: 200 chats per configuration with Qwen2.5-7B-Instruct playing a seeker from an ESConv
+validation or test situation, at most six seeker messages (32 minutes on an RTX 3090 for all three).
+
+| Per configuration | Direct | Planning | Look-ahead |
+|---|---|---|---|
+| Seeker messages per chat | 3.86 | 3.88 | 3.90 |
+| Ended by the seeker ([END]) | 87.5% | 87.0% | 87.5% |
+| Ended by Guard | 11.0% | 8.5% | 8.0% |
+| Seeker's rating of the supporter (1-5) | 3.82 | 3.86 | 3.88 |
+| Eval-Critic rating of Kaki's replies | 4.28 | 4.31 | 4.45 |
+| Replies repeating an earlier reply | 0% | 0% | 0.7% |
+| Distinct-1 / Distinct-2 | 8.6 / 32.8 | 9.3 / 33.0 | 9.6 / 35.5 |
+| Reply length (words) | 15.2 | 14.0 | 15.4 |
+| Strategies used per chat | | 2.36 | 2.39 |
+
+Paired over situations, look-ahead - direct is +0.06 [+0.005, +0.12] on the seeker's rating and planning
+cannot be told apart from either; look-ahead's Eval-Critic lead (+0.16 over planning) is discounted as
+above. The seeker model gives a 4 in 82-86% of chats, so its rating has little resolution. No
+configuration repeats itself within a chat, and look-ahead is the most varied.
+
+Guard ended 8-11% of the chats, far above the 2% of ESConv turns it was tuned to interrupt. The same 12
+opening messages (6%) were flagged in all three configurations, and on inspection they are ordinary
+distress: grief over a pet, arguments with a partner, "feeling down", an accidental fall. The simulated
+seekers write longer and more emotional messages than ESConv's (22 words against 15 per utterance), and
+the classifier reacts to that register.
+
+## Speed and memory
+
+`src/benchmark.py` on one RTX 3090, ten handwritten queries (`configs/queries.json`), one turn each after a
+warm-up. Parameters count every model the system loads.
+
+| System | Parameters | Median seconds per turn | Peak GPU memory |
+|---|---|---|---|
+| Direct | 659M | 0.65 | 1.6 GB |
+| Planning | 784M | 0.38 | 2.1 GB |
+| Look-ahead | 968M | 1.25 | 2.8 GB |
+| Qwen zero-shot | 494M | 1.70 | 1.0 GB |
+| BlenderBot-small | 88M | 0.11 | 0.3 GB |
+
+Look-ahead costs about three Speak calls per turn. Direct is slower than planning on these queries, probably
+because its replies are longer. The laptop-CPU measurement is in `docs/demo.md`.
+
+## Replies to handwritten queries
+
+The same ten opening messages (five in Singlish) went through every system. Two observations:
+
+- Guard flagged "I have three assignments due this week and I don't know where to start. I feel like I'm
+  drowning." in every configuration, a false alarm on a figure of speech (see `docs/guard.md`).
+- Planning answered six of the other nine with Restatement and three with a short Question ("I'm sorry
+  to hear that. What happened?"), the strategies Plan favours. Look-ahead sent a different reply in six of
+  the nine, sometimes more specific ("Have you tried talking to your friend about how they have been
+  acting?", "It can be hard to feel alone when you're new in a new place.") and sometimes just a different
+  short formula. Replies to the Singlish queries ("sian", "kena scolded", "paiseh") stayed on topic in
+  every configuration, though Perceive's emotion labels for them are shaky (shame for "fail everything
+  lah", disgust for "so sian").
+
 ## Stage results on test
 
 | Stage | Result | Details |
@@ -64,6 +184,8 @@ than Plan's first choice, which is by design.
 | Perceive | emotion accuracy 0.54 (macro-F1 0.41), problem accuracy 0.75 (macro-F1 0.67) | `docs/perceive.md` |
 | Plan | accuracy 0.321, macro-F1 0.202, reference strategy in the top three 65.1% | `docs/plan.md` |
 | Critic | real reply above another dialogue's 92.4%; Spearman with ratings 0.11 | `docs/critic.md` |
+| Strategy tagger (for controllability) | accuracy 0.579, macro-F1 0.544 on supporter replies | above |
+| Guard, 60 red-team probes | recall 0.47, precision 0.64 | `docs/guard.md` |
 
 ## Reproduce
 
@@ -72,6 +194,21 @@ python src/generate_outputs.py --critic checkpoints/critic-contrast --critic-wei
 python src/metrics.py
 python src/compare_configs.py --subset after_seeker
 python src/compare_configs.py --subset all
+```
+
+Baselines, held-out Critic, controllability, simulator and speed, after the above:
+
+```sh
+python src/plan.py --input response --output checkpoints/strategy-tagger
+python src/baselines.py train-blenderbot
+python src/baselines.py generate --system blenderbot
+python src/baselines.py generate --system zeroshot
+python src/perplexity.py
+python src/metrics.py
+python src/compare_configs.py --subset after_seeker --critic checkpoints/eval-critic-contrast
+python src/controllability.py
+python src/simulate.py --critic checkpoints/critic-contrast --critic-weight 0
+python src/benchmark.py --critic checkpoints/critic-contrast --critic-weight 0
 ```
 
 Generation took about an hour for the three configurations on one RTX 3090 GPU.
