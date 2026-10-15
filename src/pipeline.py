@@ -6,8 +6,9 @@ The three configurations compared in the proposal share Guard and Perceive:
     lookahead  the conditioned adapter writes one reply for each of the top three strategies, and the
                reply with the highest critic score + critic_weight * planner probability is chosen
 
-`critic` is any callable (history, replies) -> scores. Until the Critic is trained, lookahead ranks the
-candidates by planner probability alone and reports critic scores as None.
+`critic` is any callable (history, replies) -> scores. Kaki.load uses checkpoints/critic when it holds a
+lookahead.json written by src/tune_lookahead.py, with the weight chosen there on validation. Without a
+Critic, lookahead ranks the candidates by planner probability alone, which reproduces planning.
 
 Usage, from the repository root with src on the import path:
     from pipeline import Kaki
@@ -51,6 +52,12 @@ class Kaki:
 
         checkpoints = Path(checkpoints)
         needs_plan = any(c in configs for c in ("planning", "lookahead"))
+        tuned = checkpoints / "critic" / "lookahead.json"
+        if critic is None and "lookahead" in configs and tuned.exists():
+            weight = json.loads(tuned.read_text(encoding="utf-8"))["critic_weight"]
+            if weight is not None:  # None: validation preferred planner probability alone
+                from critic import Critic
+                critic, critic_weight = Critic(checkpoints / "critic", device), weight
         speakers = {}
         if "direct" in configs:
             speakers["history"] = Speaker(checkpoints / "speak-history", device)
