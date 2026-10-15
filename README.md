@@ -27,10 +27,11 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Guard (`src/guard.py`) | trained and evaluated |
 | Plan (`src/plan.py`) | code and smoke run done; full training pending |
 | Speak (`src/speak.py`, `src/train_speak.py`) | code and smoke run done; full training pending |
-| Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; Critique pending |
-| Critique, simulator, demo | not started |
+| Critique (`src/critic.py`, `src/train_critic.py`) | Critic and Eval-Critic trained on feedback ratings; they do not yet judge replies (see `docs/critic.md`) |
+| Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; ranks candidates by planner probability for now |
+| Simulator, demo | not started |
 
-Results so far: Perceive in `docs/perceive.md`, Guard in `docs/guard.md`.
+Results so far: Perceive in `docs/perceive.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
 
 ## Repository layout
 
@@ -48,9 +49,11 @@ src/train_speak.py          Speak: LoRA adapters for Qwen2.5-0.5B-Instruct
 src/speak.py                Speak prompts and generation
 src/generate_candidates.py  Plan -> Speak check without a Critic
 src/audit_feedback.py       ESConv feedback alignment audit
+src/train_critic.py         Critique: Critic and Eval-Critic on disjoint halves of training dialogues
+src/critic.py               Critique inference (DeBERTa-v3-base cross-encoder)
 src/pipeline.py             Kaki: Guard -> Perceive -> Plan -> Speak -> Critique, terminal chat
 tests/                      unit tests (python -m unittest discover -s tests)
-docs/                       notes per stage: perceive, guard, plan, speak, feedback-audit
+docs/                       notes per stage: perceive, guard, plan, speak, feedback-audit, critic
 requirements.txt            pinned local dependencies
 data/                       generated, not tracked by git (see below)
 checkpoints/                generated, not tracked by git
