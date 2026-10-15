@@ -81,6 +81,10 @@ block, use post-conversation survey scores as per-reply labels, or interpret
 unrated examples as negative feedback. `audit.json` reports rating imbalance,
 exclusions and strategy distributions as well as a raw-data fingerprint.
 
+The subsequent [feedback audit](feedback-audit.md) confirms that the original
+collection protocol requested a rating after two supporter utterances. The
+last-block proxy therefore needs explicit weak-supervision treatment.
+
 ## Remaining integration decisions
 
 - Agree on a Critic target after auditing the rating semantics. Compare against
