@@ -84,6 +84,11 @@ checkpoints/                generated, not tracked by git
 
 ## Setup
 
+Checked from a fresh clone on 16 October 2026 (SCIS GPU cluster, Python 3.12): the pinned requirements install,
+the unit tests pass, the preparation scripts download the data and reproduce the split fingerprints
+(`dd619339a81a` for ESConv, `4eb8c3b2453f` for Guard), every training script's `--smoke` mode runs, and the
+look-ahead pipeline answers with the trained checkpoints.
+
 ```bash
 python -m venv nlc_venv
 source nlc_venv/bin/activate
