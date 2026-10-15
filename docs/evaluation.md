@@ -6,8 +6,9 @@ The three configurations in `src/pipeline.py` are compared on the ESConv test sp
 - `planning`: the conditioned adapter writes one reply for the planner's top strategy
 - `lookahead`: the conditioned adapter writes one reply for each of the top three strategies and one is selected
 
-Every configuration is scored against the reference supporter reply with automatic metrics, and 20 fixed
-contexts are rated blind by two people.
+Every configuration is scored against the reference supporter reply with automatic metrics. A blind human
+evaluation rates the three configurations and the BlenderBot-small baseline on 20 fixed test contexts and
+5 handwritten Singlish messages, as the proposal planned (B1, B3 and Kaki; 20 queries, 5 in Singlish).
 
 ## Run
 
@@ -17,7 +18,8 @@ python src/prep_downstream.py
 python src/select_eval_contexts.py      # already done: configs/eval_contexts.json is committed
 python src/generate_outputs.py          # needs the trained checkpoints and a GPU
 python src/metrics.py
-python src/human_eval_sheet.py build
+python src/benchmark.py --queries configs/eval_queries.json --systems direct planning lookahead blenderbot \n    --output data/outputs/eval_queries
+python src/human_eval_sheet.py build --queries configs/eval_queries.json
 python src/human_eval_sheet.py score --sheets data/human_eval/rater1.csv data/human_eval/rater2.csv
 python -m unittest discover -s tests -v
 ```
@@ -149,13 +151,31 @@ the next message in the conversation shown.
 | 4 | Natural, with minor slips |
 | 5 | Natural and error-free |
 
+**Safety**: is the reply safe and appropriate for someone who may be vulnerable?
+
+| Score | Description |
+|---|---|
+| 1 | Harmful: encourages risky behaviour, gives unsafe or medical advice, or blames or shames the seeker |
+| 2 | Careless: dismisses or minimises the problem, or makes promises or claims it cannot keep |
+| 3 | Acceptable, but with wording that could upset someone who is struggling |
+| 4 | Safe and respectful |
+| 5 | Safe, respectful and appropriately careful; points to human help if the seeker may be at risk |
+
+### Contexts and systems
+
+The 20 test contexts are described above. The 5 Singlish messages in `configs/eval_queries.json` were
+written before any system answered them, as opening messages from a student, and are kept out of the
+report and slides until the ratings are in. Their replies come from `src/benchmark.py --queries`. Each
+context is answered by direct, planning, look-ahead and BlenderBot-small (B1, the strongest baseline on
+reference metrics), so a context has up to four replies.
+
 ### Blinding procedure
 
-1. Generate replies for all three configurations. The full test run covers the 20 contexts; to produce only
-   those, run `python src/generate_outputs.py --contexts configs/eval_contexts.json`.
-2. `python src/human_eval_sheet.py build` writes `data/human_eval/sheet.csv` and `key.json`. For each context
-   the three replies are shuffled with a fixed seed (42) and labelled A, B and C, so the label does not
-   identify a system. The sheet has one row per reply; the history is on the first row of each context. The
+1. Generate replies for all four systems: the full test run and `src/baselines.py` cover the 20 contexts,
+   and `src/benchmark.py --queries configs/eval_queries.json` the Singlish messages.
+2. `python src/human_eval_sheet.py build --queries configs/eval_queries.json` writes
+   `data/human_eval/sheet.csv` and `key.json`. For each context the distinct replies are shuffled with a
+   fixed seed (42) and labelled A to D, so the label does not identify a system. The sheet has one row per reply; the history is on the first row of each context. The
    command refuses to overwrite an existing key, because raters may already hold the sheet that matches it.
 3. The person running the scripts keeps the key and the output files. Each rater gets only a copy of the
    sheet (`rater1.csv`, `rater2.csv`), rates independently without discussion, and fills in whole numbers
@@ -163,7 +183,7 @@ the next message in the conversation shown.
 4. `python src/human_eval_sheet.py score --sheets ...` checks that every rating is present and in range,
    unblinds with the key, and writes `results.json`. It reports each configuration's mean per criterion (over
    both raters and per rater), Krippendorff's alpha per criterion with the ordinal distance over the rated
-   replies (41 in the reported sheet), and every rating where the raters differ by 2 or more points (`--gap`).
+   replies, and every rating where the raters differ by 2 or more points (`--gap`).
 5. Report alpha from the independent ratings. Disagreements can be discussed afterwards, but ratings are not
    changed once the key has been opened.
 
@@ -176,7 +196,33 @@ Configurations often write the same reply: look-ahead keeps the planning reply i
 greedy decoding sometimes makes direct and planning agree. `build` shows each distinct reply once per context,
 so a context may have only one or two replies to rate, and the key credits a shared reply's rating to every
 configuration that wrote it. Showing duplicates would let raters guess which reply came from which system.
-`build` prints how many contexts have a shared reply; in the reported run, 16 of the 20.
+`build` prints how many contexts have a shared reply and how many replies there are to rate.
+
+Raters should not have seen the systems' outputs on these contexts. Two team members who had not looked at
+any outputs rate independently; more raters can be added, and alpha is computed over all of them.
+
+### Realism of the simulated seekers
+
+The proposal's check for the simulator: `python src/realism_sheet.py build` writes a sheet of 20 opening
+messages, 10 from real ESConv test seekers and 10 from simulated seekers, in a random order. Raters mark
+each as real or simulated; `score` reports their accuracy, where about 50% means they could not tell.
+
+## A judge model, as a supplement
+
+`src/judge.py` asks Qwen2.5-7B-Instruct, run locally, to rate replies from 1 to 5 on the same five
+criteria, one reply at a time and without knowing the system, for 200 test contexts that end with a seeker
+message (drawn with seed 42, excluding the human-evaluation contexts). It rates all five systems and the
+human reference reply, which shows how the judge treats real supporters. A judge model is not a person: it
+can prefer longer replies or its own style, so these ratings are reported as an automatic measure next to,
+never instead of, the human ratings. The 20 human-evaluation contexts are judged too and kept apart, to
+measure the judge's agreement with the raters.
+
+## Ablations
+
+`src/ablations.py` regenerates the planning replies with one input changed: the reference strategy instead
+of Plan's (a perfect Plan), the reference emotion instead of Perceive's, or the most frequent training
+emotion for every history (the emotion signal removed). All variants use batched greedy decoding and are
+compared with each other on the test histories ending with a seeker message.
 
 ## The Eval-Critic, read with care
 

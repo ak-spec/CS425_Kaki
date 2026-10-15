@@ -66,6 +66,9 @@ src/controllability.py      does Speak follow the requested strategy (independen
 src/simulate.py             simulated chats with a prompted seeker model
 src/benchmark.py            parameters, latency per turn and peak memory
 src/guard_probes.py         Guard on handwritten red-team probes
+src/judge.py                rubric ratings from a local judge model (supplements the human ratings)
+src/ablations.py            planning with the reference strategy or emotion, or no emotion
+src/realism_sheet.py        blind real-or-simulated test for the seeker simulator
 src/human_eval_sheet.py     blinded rating sheet and agreement scoring
 app.py                      Streamlit demo (python -m streamlit run app.py)
 tests/                      unit tests (python -m unittest discover -s tests)
