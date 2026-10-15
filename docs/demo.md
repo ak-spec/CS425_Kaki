@@ -29,14 +29,16 @@ Real mode calls `Kaki.load(checkpoints, configs=[...])` for the chosen configura
 | all | `checkpoints/guard`, `checkpoints/perceive`, `data/processed/label_maps.json` |
 | direct | `checkpoints/speak-history` |
 | planning, lookahead | `checkpoints/plan`, `checkpoints/speak-conditioned` |
+| lookahead, optional | `checkpoints/critic`: the reply-contrast Critic with its `lookahead.json` |
 
 If any are missing, the page lists them and stops. The first real run also downloads `distilroberta-base`
 (Perceive's tokenizer and configuration) and `Qwen/Qwen2.5-0.5B-Instruct` (Speak's base model, about 1 GB)
 from the Hugging Face Hub unless they are already cached.
 
-No Critic is loaded, because the trained Critic does not yet judge replies ([critic](critic.md)).
-Lookahead therefore ranks its three candidates by planner probability, as `src/pipeline.py` does without
-a Critic.
+For look-ahead, `Kaki.load` uses `checkpoints/critic` when it holds a `lookahead.json`. Copy the
+reply-contrast Critic there (on the cluster it is `checkpoints/critic-contrast`, whose `lookahead.json`
+holds the weight chosen on validation, 0; see [critic](critic.md)). Without it, look-ahead ranks its three
+candidates by planner probability and gives the planning reply.
 
 `tests/test_app.py` checks the fake Kaki's output against the pipeline's format and runs the page in fake
 mode with Streamlit's `AppTest`.

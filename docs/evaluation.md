@@ -162,8 +162,8 @@ the next message in the conversation shown.
    from 1 to 5 for every criterion; `comment` is optional. Save as CSV (UTF-8).
 4. `python src/human_eval_sheet.py score --sheets ...` checks that every rating is present and in range,
    unblinds with the key, and writes `results.json`. It reports each configuration's mean per criterion (over
-   both raters and per rater), Krippendorff's alpha per criterion with the ordinal distance over the 60
-   replies, and every rating where the raters differ by 2 or more points (`--gap`).
+   both raters and per rater), Krippendorff's alpha per criterion with the ordinal distance over the rated
+   replies (41 in the reported sheet), and every rating where the raters differ by 2 or more points (`--gap`).
 5. Report alpha from the independent ratings. Disagreements can be discussed afterwards, but ratings are not
    changed once the key has been opened.
 
@@ -178,13 +178,58 @@ so a context may have only one or two replies to rate, and the key credits a sha
 configuration that wrote it. Showing duplicates would let raters guess which reply came from which system.
 `build` prints how many contexts have a shared reply; in the reported run, 16 of the 20.
 
-## Not used: the Eval-Critic
+## The Eval-Critic, read with care
 
-The proposal planned an independent Eval-Critic to score all configurations. Trained on ratings alone, the
+The proposal planned an independent Eval-Critic to score all systems. Trained on ratings alone, the
 Critics ignore the reply (`docs/critic.md`). The reply-contrast Eval-Critic does read the reply, but what it
 learnt is fit to the context rather than helpfulness (Spearman with test ratings 0.18), and it shares its
-training objective with the Critic that selects look-ahead replies, so its scores would favour look-ahead by
-construction. It is therefore not used to compare the configurations; the human evaluation is.
+training objective with the Critic that selects look-ahead replies, so it is likely to favour look-ahead.
+`src/compare_configs.py --critic checkpoints/eval-critic-contrast` reports its predicted rating for every
+system and for the reference replies, with paired intervals. Following the proposal's validity rule, a
+gain that shows only on the Eval-Critic, and not on the reference metrics or the human ratings, is not
+counted as an improvement.
+
+## Baselines
+
+`src/baselines.py` adds the proposal's baselines on the same test rows: Qwen2.5-0.5B-Instruct zero-shot
+(B2, the history-only prompt without an adapter) and BlenderBot-small (B1, 90M parameters, fine-tuned on
+our training split to map the history to the reply, 5 epochs at most, best epoch by validation loss).
+Both decode greedily. BlenderBot-small's tokenizer lowercases and spaces out punctuation, so its replies
+are detokenized and sentence-cased before scoring. B3 of the proposal, Qwen fine-tuned without strategies,
+is the direct configuration. `src/perplexity.py` gives the test perplexity of the reference replies under
+the three Qwen-based generators; BlenderBot-small's perplexity is in its `run.json` and uses a different
+tokenizer, so it is not comparable.
+
+## Strategy controllability
+
+`src/controllability.py` checks whether the conditioned Speak adapter carries out the strategy it is given.
+An independent tagger, the strategy classifier trained on supporter replies alone (`src/plan.py --input
+response`, `checkpoints/strategy-tagger`), labels each reply. For 200 test histories ending with a seeker
+message, the adapter writes one reply per strategy (with the reference emotion), and the script reports
+how often the tag matches the requested strategy, per strategy and as a confusion matrix. The tagger's
+accuracy on the human replies of the same histories is the ceiling; how often the history-only adapter's
+replies get each tag is the floor. It also tags the planning and look-ahead replies of the test run.
+
+## Simulated conversations
+
+`src/simulate.py` runs the proposal's interactive evaluation: 200 chats per configuration with a seeker
+played by Qwen2.5-7B-Instruct, prompted with the situation, emotion and problem of an ESConv validation or
+test dialogue (nothing else from it). The seeker opens, answers Kaki for at most six messages and ends with
+[END] when it wants to stop; a Guard bypass ends the chat. The proposal planned a LoRA seeker trained on
+mirrored ESConv seeker turns; the prompted model replaced it to stay within the time box, and it keeps the
+simulator independent of Kaki's training data. All configurations meet the same seekers: the opening
+message for each situation is shared and sampling is seeded. Reported per configuration: the Eval-Critic's
+mean predicted rating, the seeker's own 1-5 answer to how helpful the supporter was, the share of chats the
+seeker ended, Guard bypasses, repetition within a chat, Distinct-n, reply length and strategies used, with
+paired intervals between configurations over situations. A seeker model's opinion is not a person's: the
+proposal's realism check (people guessing real from simulated seeker turns) was not run.
+
+## Speed and memory
+
+`src/benchmark.py` loads each system in its own process and answers the ten handwritten queries in
+`configs/queries.json` (five in Singlish), reporting parameters, median seconds per turn after a warm-up
+and peak memory. Run it on the GPU and on a laptop CPU (`--device cpu --threads 4`). The replies it saves
+feed the qualitative comparison.
 
 ## References
 
