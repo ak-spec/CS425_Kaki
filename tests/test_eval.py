@@ -153,6 +153,17 @@ class GenerateTests(unittest.TestCase):
             generate(fake_kaki(), rows[:2], ["direct"], out, RAW, overwrite=True)
             self.assertEqual(len(read_jsonl(out / "direct.jsonl")), 2)
 
+    def test_history_without_a_seeker_turn_is_skipped(self):
+        raw = [{"dialog": [{"speaker": "supporter", "content": "Hi there"},
+                           {"speaker": "supporter", "content": "How are you?"},
+                           {"speaker": "seeker", "content": "tired"}]}]
+        row = {"dialogue_id": 0, "utterance_idx": 1, "text": history(raw[0]["dialog"][:1]), "response": "How are you?",
+               "strategy": "Question", "problem": "other", "emotion": "other"}
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            out = Path(tmp) / "outputs"
+            self.assertEqual(generate(fake_kaki(), [row], CONFIGS, out, raw), dict.fromkeys(CONFIGS, 0))
+            self.assertEqual(read_jsonl(out / "direct.jsonl"), [])
+
     def test_load_rows_follows_contexts(self):
         rows = test_rows()
         with tempfile.TemporaryDirectory() as tmp:

@@ -75,6 +75,10 @@ def record(row: dict, turns: list[dict], out: dict) -> dict:
     }
 
 
+def has_seeker(turns: list[dict]) -> bool:
+    return any(t["speaker"] == "seeker" for t in turns)
+
+
 def done_keys(path: Path) -> set:
     if not path.exists():
         return set()
@@ -98,6 +102,8 @@ def generate(kaki, rows: list[dict], configs, output: Path, dialogues=None, over
             todo = [c for c in configs if key not in done[c]]
             if todo:
                 turns = row_turns(row, dialogues)
+                if not has_seeker(turns):  # the bot only answers a seeker, so there is nothing to reply to
+                    todo = []
             for c in todo:
                 files[c].write(json.dumps(record(row, turns, kaki.respond(turns, c)), ensure_ascii=False) + "\n")
                 files[c].flush()
@@ -135,7 +141,8 @@ def main():
     kaki = Kaki.load(args.checkpoints, configs=args.configs, critic=critic, critic_weight=args.critic_weight)
     written = generate(kaki, rows, args.configs, args.output, dialogues, args.overwrite)
     run = {"args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-           "rows": len(rows), "written": written, "turns_from": "raw" if dialogues else "history string"}
+           "rows": len(rows), "written": written, "turns_from": "raw" if dialogues else "history string",
+           "skipped_no_seeker_turn": sum(not has_seeker(row_turns(r, dialogues)) for r in rows)}
     (args.output / "run.json").write_text(json.dumps(run, indent=1), encoding="utf-8")
 
 
