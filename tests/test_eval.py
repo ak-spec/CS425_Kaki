@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from compare_configs import bootstrap_diff, paired_rows
 from generate_outputs import generate, load_rows, row_turns
 from human_eval_sheet import CRITERIA, FIELDS, build, krippendorff_alpha, read_sheet, score
 from metrics import distinct, evaluate, latex, load_outputs, score_rows, words
@@ -333,6 +334,31 @@ class HumanEvalTests(unittest.TestCase):
                                                     "criterion": "fluency", "ratings": [2, 5]}])
         with self.assertRaises(ValueError):
             score([rater1, {}], key)
+
+
+class CompareTests(unittest.TestCase):
+    def test_rows_are_aligned_and_filtered(self):
+        def line(c, key, after=True, bypassed=False):
+            return {"dialogue_id": key[0], "utterance_idx": key[1], "reference": f"ref {key}", "reply": f"{c} {key}",
+                    "after_seeker": after, "bypassed": bypassed}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for c in CONFIGS:
+                rows = [line(c, (2, 1)), line(c, (1, 3)), line(c, (1, 5), after=False), line(c, (3, 1), bypassed=True)]
+                if c == "direct":
+                    rows.append(line(c, (4, 1)))  # missing from the other configurations
+                write_jsonl(out / f"{c}.jsonl", rows)
+            after = paired_rows(out, "after_seeker")
+            self.assertEqual([(r["dialogue_id"], r["utterance_idx"]) for r in after["lookahead"]], [(1, 3), (2, 1)])
+            self.assertEqual([r["reply"] for r in after["planning"]], ["planning (1, 3)", "planning (2, 1)"])
+            self.assertEqual(len(paired_rows(out, "all")["direct"]), 3)
+
+    def test_bootstrap_interval_contains_the_mean(self):
+        d = bootstrap_diff([3.0, 4.0, 5.0, 6.0], [1.0, 1.0, 1.0, 1.0])
+        self.assertEqual(d["mean"], 3.5)
+        self.assertLessEqual(d["ci95"][0], 3.5)
+        self.assertGreaterEqual(d["ci95"][1], 3.5)
+        self.assertEqual(bootstrap_diff([1.0, 2.0], [1.0, 2.0]), {"mean": 0.0, "ci95": [0.0, 0.0]})
 
 
 if __name__ == "__main__":
