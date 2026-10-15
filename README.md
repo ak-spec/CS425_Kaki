@@ -26,12 +26,14 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Perceive (`train_perceive.ipynb`, `src/perceive.py`) | trained and evaluated |
 | Guard (`src/guard.py`) | trained and evaluated |
 | Plan (`src/plan.py`) | trained: validation accuracy 0.33, top-three coverage 0.64 (see `docs/plan.md`) |
-| Speak (`src/speak.py`, `src/train_speak.py`) | code and smoke run done; full training pending |
+| Speak (`src/speak.py`, `src/train_speak.py`) | both adapters trained (see `docs/speak.md`) |
 | Critique (`src/critic.py`, `src/train_critic.py`) | Critic and Eval-Critic trained on feedback ratings; they do not yet judge replies (see `docs/critic.md`) |
 | Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; ranks candidates by planner probability for now |
-| Simulator, demo | not started |
+| Evaluation (`src/select_eval_contexts.py`, `src/generate_outputs.py`, `src/metrics.py`, `src/human_eval_sheet.py`) | built; 20 human-evaluation contexts fixed; outputs pending (see `docs/evaluation.md`) |
+| Demo (`app.py`) | built and checked with stand-in models; real checkpoints pending (see `docs/demo.md`) |
+| Simulator | not started |
 
-Results so far: Perceive in `docs/perceive.md`, Plan in `docs/plan.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
+Results so far: Perceive in `docs/perceive.md`, Plan in `docs/plan.md`, Speak in `docs/speak.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
 
 ## Repository layout
 
@@ -52,8 +54,13 @@ src/audit_feedback.py       ESConv feedback alignment audit
 src/train_critic.py         Critique: Critic and Eval-Critic on disjoint halves of training dialogues
 src/critic.py               Critique inference (DeBERTa-v3-base cross-encoder)
 src/pipeline.py             Kaki: Guard -> Perceive -> Plan -> Speak -> Critique, terminal chat
+src/select_eval_contexts.py  human-evaluation contexts, chosen before any outputs
+src/generate_outputs.py     replies from each configuration on test histories
+src/metrics.py              BLEU, ROUGE-L, BERTScore, Distinct, strategy accuracy
+src/human_eval_sheet.py     blinded rating sheet and agreement scoring
+app.py                      Streamlit demo (python -m streamlit run app.py)
 tests/                      unit tests (python -m unittest discover -s tests)
-docs/                       notes per stage: perceive, guard, plan, speak, feedback-audit, critic
+docs/                       notes per stage, evaluation and demo
 requirements.txt            pinned local dependencies
 data/                       generated, not tracked by git (see below)
 checkpoints/                generated, not tracked by git
