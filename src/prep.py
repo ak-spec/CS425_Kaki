@@ -31,7 +31,7 @@ SPLIT_FRACS = {"val": 0.1, "test": 0.1}  # train gets the rest
 def fetch_raw(raw_dir: Path) -> list[dict]:
     """Download ESConv.json from the Hugging Face Hub (cached locally after the first call)."""
     path = hf_hub_download(HF_REPO, HF_FILE, repo_type="dataset", local_dir=raw_dir)
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def norm_text(s: str) -> str:
@@ -65,8 +65,6 @@ def merge_turns(dialog: list[dict]) -> tuple[list[dict], int]:
             merges += 1
         else:
             turns.append({"speaker": t["speaker"], "text": text})
-    print(turns)
-    print(merges)
     # total of 7,973 merges done
     return turns, merges
 
@@ -150,8 +148,7 @@ def main():
 
     # split BEFORE building samples so no prefixes of one dialogue cross partitions
     split = split_dialogues(ids, {i: labels[i]["problem"] for i in ids}, args.seed)
-    print(split)
-    
+
     turns_by_id, total_merges = {}, 0
     for i, d in kept:
         turns, merges = merge_turns(d["dialog"])
@@ -173,7 +170,7 @@ def main():
         for i in split_ids:
             rows = build_samples(i, turns_by_id[i], labels[i])
             samples.extend(rows)
-        with open(args.out / f"{name}.jsonl", "w") as f:
+        with open(args.out / f"{name}.jsonl", "w", encoding="utf-8", newline="\n") as f:
             for s in samples:
                 f.write(json.dumps(s) + "\n")
         report["splits"][name] = {
@@ -184,9 +181,10 @@ def main():
             "problem": dict(collections.Counter(labels[i]["problem"] for i in split_ids)),
         }
 
-    (args.out / "splits.json").write_text(json.dumps({"seed": args.seed, **split}, indent=1))
-    (args.out / "label_maps.json").write_text(json.dumps(label_maps, indent=1))
-    (args.out / "prep_report.json").write_text(json.dumps(report, indent=1))
+    # UTF-8 with LF line endings on every OS, so splits.json has the same fingerprint everywhere
+    for name, obj in (("splits.json", {"seed": args.seed, **split}), ("label_maps.json", label_maps),
+                      ("prep_report.json", report)):
+        (args.out / name).write_text(json.dumps(obj, indent=1), encoding="utf-8", newline="\n")
     print(json.dumps(report, indent=1))
 
 
