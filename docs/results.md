@@ -160,7 +160,19 @@ warm-up. Parameters count every model the system loads.
 | BlenderBot-small | 88M | 0.11 | 0.3 GB |
 
 Look-ahead costs about three Speak calls per turn. Direct is slower than planning on these queries, probably
-because its replies are longer. The laptop-CPU measurement is in `docs/demo.md`.
+because its replies are longer.
+
+On a CPU (4 threads of an AMD EPYC 7702P, roughly a laptop's share; `--device cpu --threads 4`):
+
+| System | Median seconds per turn (slowest) | Peak memory |
+|---|---|---|
+| Direct | 3.2 (4.2) | 3.7 GB |
+| Planning | 2.9 (3.8) | 3.7 GB |
+| Look-ahead | 8.5 (12.3) | 4.1 GB |
+| BlenderBot-small | 0.5 (0.8) | 1.1 GB |
+
+Speak loads Qwen in fp32 on a CPU. Its stored bf16 weights are emulated on most CPUs: in bf16 the same
+look-ahead turn took 14.0 seconds (2.3 to 3.1 GB). The proposal's target was under 10 seconds per turn.
 
 ## Replies to handwritten queries
 
