@@ -1,0 +1,10 @@
+{
+ "note": "Five handwritten Singlish opening messages for the blind human evaluation, written before any system answered them. Not shown in the report or slides before the ratings are in.",
+ "queries": [
+  {"id": "h1", "singlish": true, "text": "Eh I just found out my whole project group went for supper without me, and they were discussing our project there. Feel like they don't want me in the group."},
+  {"id": "h2", "singlish": true, "text": "Prelims coming already and I haven't even finished revising one subject. My parents expect me to get into NUS, I scared I disappoint them."},
+  {"id": "h3", "singlish": true, "text": "My best friend got together with the guy I liked and never tell me. Now every time I see them together I feel so lousy."},
+  {"id": "h4", "singlish": true, "text": "Work part-time and study full-time, I damn tired already. Weekends also no rest, I don't know how long I can tahan."},
+  {"id": "h5", "singlish": true, "text": "My CCA leader always scold me in front of everyone, I feel so paiseh. Thinking of quitting but scared people say I give up."}
+ ]
+}

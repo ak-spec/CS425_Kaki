@@ -1,15 +1,18 @@
-"""Blinded human evaluation of the three configurations on the contexts in configs/eval_contexts.json.
+"""Blinded human evaluation of the three configurations and BlenderBot-small (B1).
+
+Contexts are the 20 test histories in configs/eval_contexts.json and, with --queries, the handwritten
+Singlish messages in configs/eval_queries.json (their replies come from src/benchmark.py --queries).
 
 build: one CSV row per (context, distinct reply). A context's replies appear in a random order under the
-neutral labels A, B and C; when two configurations wrote the same reply it is shown once, so identical
-replies cannot reveal which system wrote which. The history is shown on the context's first row. The key
+neutral labels A to D; when two systems wrote the same reply it is shown once, so identical replies
+cannot reveal which system wrote which. The history is shown on the context's first row. The key
 that maps each label to its configurations goes to a separate file; raters only ever get the sheet.
 score: reads the raters' filled sheets and the key, unblinds (a shared reply's rating counts for every
 configuration that wrote it), and reports each configuration's mean for each criterion, inter-rater
 agreement (Krippendorff's alpha, ordinal) and the ratings that differ by two or more points. Rubric and
 procedure: docs/evaluation.md.
 
-    python src/human_eval_sheet.py build      # data/human_eval/sheet.csv and data/human_eval/key.json
+    python src/human_eval_sheet.py build --queries configs/eval_queries.json   # sheet.csv and key.json
     python src/human_eval_sheet.py score --sheets data/human_eval/rater1.csv data/human_eval/rater2.csv
 """
 import argparse
@@ -24,8 +27,9 @@ from pipeline import CONFIGS
 from select_eval_contexts import history_turns, read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
-CRITERIA = ("relevance", "acknowledgement", "helpfulness", "fluency")
-LABELS = "ABC"
+CRITERIA = ("relevance", "acknowledgement", "helpfulness", "fluency", "safety")
+LABELS = "ABCD"
+SYSTEMS = (*CONFIGS, "blenderbot")
 FIELDS = ["context", "label", "history", "reply", *CRITERIA, "comment"]
 
 
@@ -37,8 +41,8 @@ def build(contexts: list[dict], outputs: dict[str, dict], seed: int = 42) -> tup
     """Sheet rows and key. contexts are response rows in sheet order; outputs maps each configuration to
     {(dialogue_id, utterance_idx): output row}."""
     configs = sorted(outputs)
-    if len(configs) != len(LABELS):
-        raise ValueError(f"need exactly {len(LABELS)} configurations, got {configs}")
+    if not 2 <= len(configs) <= len(LABELS):
+        raise ValueError(f"need 2 to {len(LABELS)} systems, got {configs}")
     rng = random.Random(seed)
     sheet, key = [], {"seed": seed, "contexts": []}
     for number, row in enumerate(contexts, 1):
@@ -140,20 +144,38 @@ def score(sheets: list[dict], key: dict, gap: int = 2) -> dict:
     }
 
 
+def query_rows(path: Path) -> list[dict]:
+    """Handwritten opening messages as context rows: a one-message history and no reference reply."""
+    queries = json.loads(Path(path).read_text(encoding="utf-8"))["queries"]
+    return [{"dialogue_id": q["id"], "utterance_idx": 0, "text": f"seeker: {' '.join(q['text'].split())}"}
+            for q in queries]
+
+
+def query_outputs(path: Path) -> dict[str, dict]:
+    """{system: {(query id, 0): {"reply": ...}}} from the replies src/benchmark.py saved."""
+    return {run["system"]: {(r["id"], 0): {"reply": r["reply"]} for r in run["replies"]}
+            for run in json.loads(Path(path).read_text(encoding="utf-8"))}
+
+
 def main_build(args):
     folder = private_dir(args.out)
     if (folder / "key.json").exists() and not args.overwrite:
         raise SystemExit(f"{folder / 'key.json'} exists; raters may already hold its sheet. Use --overwrite.")
     contexts = load_rows(args.data, args.contexts)
     outputs = {c: {(r["dialogue_id"], r["utterance_idx"]): r for r in read_jsonl(args.outputs / f"{c}.jsonl")}
-               for c in CONFIGS}
+               for c in args.systems}
+    if args.queries:
+        contexts += query_rows(args.queries)
+        for system, replies in query_outputs(args.query_replies).items():
+            if system in outputs:
+                outputs[system].update(replies)
     sheet, key = build(contexts, outputs, args.seed)
     with open(folder / "sheet.csv", "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS)
         writer.writeheader()
         writer.writerows(sheet)
     (folder / "key.json").write_text(json.dumps(key, indent=1), encoding="utf-8")
-    same = sum(len(k["labels"]) < len(CONFIGS) for k in key["contexts"])
+    same = sum(len(k["labels"]) < len(args.systems) for k in key["contexts"])
     print(json.dumps({"contexts": len(contexts), "replies_to_rate": len(sheet), "sheet": str(folder / "sheet.csv"),
                       "key": str(folder / "key.json"), "contexts_with_a_shared_reply": same}))
 
@@ -181,6 +203,10 @@ def main():
     b.add_argument("--contexts", type=Path, default=ROOT / "configs/eval_contexts.json")
     b.add_argument("--data", type=Path, default=ROOT / "data/processed/downstream/responses_test.jsonl")
     b.add_argument("--outputs", type=Path, default=ROOT / "data/outputs")
+    b.add_argument("--systems", nargs="+", choices=SYSTEMS, default=list(SYSTEMS))
+    b.add_argument("--queries", type=Path, help="handwritten messages to add, e.g. configs/eval_queries.json")
+    b.add_argument("--query-replies", type=Path, default=ROOT / "data/outputs/eval_queries/benchmark_cuda.json",
+                   help="replies to --queries saved by src/benchmark.py")
     b.add_argument("--out", type=Path, default=ROOT / "data/human_eval")
     b.add_argument("--seed", type=int, default=42)
     b.add_argument("--overwrite", action="store_true")

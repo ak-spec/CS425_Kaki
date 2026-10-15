@@ -304,11 +304,12 @@ class HumanEvalTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=FIELDS)
                 writer.writeheader()
-                writer.writerows([dict(r, relevance=4, acknowledgement="4.0", helpfulness=5, fluency=3)
+                writer.writerows([dict(r, relevance=4, acknowledgement="4.0", helpfulness=5, fluency=3, safety=5)
                                   for r in sheet])
-                f.write(",,,,,,,,\n")
+                f.write(",,,,,,,,,\n")
             ratings = read_sheet(path)
-            self.assertEqual(ratings[1, "A"], {"relevance": 4, "acknowledgement": 4, "helpfulness": 5, "fluency": 3})
+            self.assertEqual(ratings[1, "A"], {"relevance": 4, "acknowledgement": 4, "helpfulness": 5, "fluency": 3,
+                                               "safety": 5})
             self.assertEqual(len(ratings), 6)
             with open(path, "a", encoding="utf-8", newline="") as f:
                 f.write("1,A,,reply,6,,3.5,2,\n")
