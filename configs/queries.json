@@ -1,0 +1,15 @@
+{
+ "note": "Handwritten opening messages from a student, five in Singlish. Used for the qualitative comparison and the speed benchmark; not taken from any dataset.",
+ "queries": [
+  {"id": "en1", "singlish": false, "text": "I have three assignments due this week and I don't know where to start. I feel like I'm drowning."},
+  {"id": "en2", "singlish": false, "text": "My best friend has been ignoring my messages since our argument last week and it really hurts."},
+  {"id": "en3", "singlish": false, "text": "I failed my midterm even though I studied really hard. I feel so stupid."},
+  {"id": "en4", "singlish": false, "text": "I just moved here for university and I don't really have anyone to talk to."},
+  {"id": "en5", "singlish": false, "text": "My parents keep comparing me to my cousin who got into medicine. Nothing I do is good enough for them."},
+  {"id": "sg1", "singlish": true, "text": "Finals next week and I feel like I'm gonna fail everything lah."},
+  {"id": "sg2", "singlish": true, "text": "My project groupmates never do their part one, I so sian already."},
+  {"id": "sg3", "singlish": true, "text": "Wah today I kena scolded by my boss in front of everyone, very paiseh and stressed."},
+  {"id": "sg4", "singlish": true, "text": "My friends all go out without me, I think they don't really want to friend me anymore."},
+  {"id": "sg5", "singlish": true, "text": "Cannot sleep sia, keep thinking about my results, scared my parents will be disappointed."}
+ ]
+}
