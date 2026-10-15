@@ -25,13 +25,13 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Data preprocessing (`src/prep.py`) | done |
 | Perceive (`train_perceive.ipynb`, `src/perceive.py`) | trained and evaluated |
 | Guard (`src/guard.py`) | trained and evaluated |
-| Plan (`src/plan.py`) | code and smoke run done; full training pending |
+| Plan (`src/plan.py`) | trained: validation accuracy 0.33, top-three coverage 0.64 (see `docs/plan.md`) |
 | Speak (`src/speak.py`, `src/train_speak.py`) | code and smoke run done; full training pending |
 | Critique (`src/critic.py`, `src/train_critic.py`) | Critic and Eval-Critic trained on feedback ratings; they do not yet judge replies (see `docs/critic.md`) |
 | Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; ranks candidates by planner probability for now |
 | Simulator, demo | not started |
 
-Results so far: Perceive in `docs/perceive.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
+Results so far: Perceive in `docs/perceive.md`, Plan in `docs/plan.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
 
 ## Repository layout
 

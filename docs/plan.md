@@ -114,8 +114,26 @@ an immediately preceding supporter utterance and were left unpaired. Of all
 ratings, 6,308 were 4 or 5, which motivates a high-score baseline for Critic.
 These are data counts, not model performance results.
 
-The RoBERTa-base smoke run completed on CPU with 16 training and 16 validation
-examples, including checkpoint save, reload and top-three inference. Full
-training and final test evaluation remain outstanding. The split manifest's
-LF-normalised SHA-256 prefix is `dd619339a81a`, matching the original split;
-Windows CRLF line endings change the file hash without changing dialogue IDs.
+The split manifest's SHA-256 prefix is `dd619339a81a`, matching the original
+split on every OS.
+
+## Training results
+
+Full training with the defaults above on one RTX 3090 took 18 minutes. The best
+epoch (3) on validation:
+
+| Run | Accuracy | Macro-F1 | Top-three coverage |
+| --- | ---: | ---: | ---: |
+| Default (unweighted) | 0.326 | 0.191 | 0.644 |
+| `--class-weight-power 0.5` | 0.322 | 0.209 | 0.625 |
+
+The default run never predicts four strategies (Affirmation and Reassurance,
+Information, Reflection of feelings, Self-disclosure) and over-predicts
+Providing Suggestions (recall 0.79). Tempered class weights, as used by
+Perceive and Guard, raise macro-F1 slightly but lower top-three coverage, and
+three strategies are still never predicted, so the default stays. Both are
+single-seed runs, and differences of this size are within run-to-run variation.
+
+For look-ahead this means the three candidates are mostly drawn from Others,
+Providing Suggestions, Question and Restatement or Paraphrasing. The reference
+strategy is among the top three 64% of the time. Test has not been evaluated.
