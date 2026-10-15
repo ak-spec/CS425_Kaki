@@ -17,7 +17,7 @@ import hashlib
 import json
 import random
 import re
-import urllib.error
+import time
 import urllib.request
 import zipfile
 import xml.etree.ElementTree as ET
@@ -62,14 +62,14 @@ def fetch_raw(raw_dir: Path) -> list[Path]:
     paths = []
     for name, checksum in FILES.items():
         path = raw_dir / name
-        for _ in range(3):  # Zenodo occasionally drops connections mid-file
+        for attempt in range(5):  # Zenodo occasionally drops connections, mid-file or before it starts
             if path.exists() and md5(path) == checksum:
                 break
             try:
                 urllib.request.urlretrieve(ZENODO_URL.format(name), path)
-            except urllib.error.ContentTooShortError:
-                continue
-        if md5(path) != checksum:
+            except OSError:  # includes URLError and ContentTooShortError
+                time.sleep(2 ** attempt)
+        if not path.exists() or md5(path) != checksum:
             raise ValueError(f"{name}: download incomplete or checksum mismatch (Zenodo file changed?)")
         paths.append(path)
     return paths
