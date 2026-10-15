@@ -23,26 +23,37 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Component | State |
 |---|---|
 | Data preprocessing (`src/prep.py`) | done |
-| Perceive training notebook | written and smoke-tested; full training run pending |
-| Guard (`src/guard.py`, see `docs/guard.md`) | trained and evaluated |
-| Plan, Speak, Critique, simulator, demo | not started |
+| Perceive (`train_perceive.ipynb`, `src/perceive.py`) | trained and evaluated |
+| Guard (`src/guard.py`) | trained and evaluated |
+| Plan (`src/plan.py`) | code and smoke run done; full training pending |
+| Speak (`src/speak.py`, `src/train_speak.py`) | code and smoke run done; full training pending |
+| Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; Critique pending |
+| Critique, simulator, demo | not started |
 
-Guard's results are in `docs/guard.md`; no other results are reported yet.
+Results so far: Perceive in `docs/perceive.md`, Guard in `docs/guard.md`.
 
 ## Repository layout
 
 ```
-src/prep.py              ESConv download, cleaning, label collapsing, split, sample building
-train_perceive.ipynb     Perceive (emotion + problem classifier) training and evaluation
-src/prep_guard.py        Guard data: C-SSRS Reddit labels, checksums, dedup, split by user
-src/train_guard.py       Guard training, threshold selection and evaluation
-src/guard.py             Guard inference: classifier, lexicon, prepared response
-configs/guard.json       Guard settings and crisis response with checked contacts
-tests/test_guard.py      Guard tests (python -m unittest discover -s tests)
-docs/guard.md            Guard data, method, results and known limits
-requirements.txt         pinned local dependencies
-data/                    generated, not tracked by git (see below)
-checkpoints/             generated, not tracked by git
+src/prep.py                 ESConv download, cleaning, label collapsing, split, sample building
+src/prep_guard.py           Guard data: C-SSRS Reddit labels, checksums, dedup, split by user
+src/train_guard.py          Guard training, threshold selection and evaluation
+src/guard.py                Guard inference: classifier, lexicon, prepared response
+configs/guard.json          Guard settings and crisis response with checked contacts
+train_perceive.ipynb        Perceive (emotion + problem classifier) training and evaluation
+src/perceive.py             Perceive inference from the notebook's checkpoint
+src/prep_downstream.py      Plan and Speak examples, provisional Critic pairs
+src/plan.py                 Plan: RoBERTa-base strategy ranker (train, evaluate, predict)
+src/train_speak.py          Speak: LoRA adapters for Qwen2.5-0.5B-Instruct
+src/speak.py                Speak prompts and generation
+src/generate_candidates.py  Plan -> Speak check without a Critic
+src/audit_feedback.py       ESConv feedback alignment audit
+src/pipeline.py             Kaki: Guard -> Perceive -> Plan -> Speak -> Critique, terminal chat
+tests/                      unit tests (python -m unittest discover -s tests)
+docs/                       notes per stage: perceive, guard, plan, speak, feedback-audit
+requirements.txt            pinned local dependencies
+data/                       generated, not tracked by git (see below)
+checkpoints/                generated, not tracked by git
 ```
 
 ### Platforms

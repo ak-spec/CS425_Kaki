@@ -1,8 +1,7 @@
 # Plan and downstream data preparation
 
-This branch implements the proposal's RoBERTa-base Plan stage, which ranks eight
-support strategies and returns the top three. It does not change Perceive or
-replace the three-candidate Speak/Critique pipeline.
+`src/plan.py` implements the proposal's RoBERTa-base Plan stage, which ranks the
+eight support strategies and returns the top three.
 
 ## Run
 
@@ -111,8 +110,8 @@ The 15 October 2026 audit of the 1,300-dialogue release produced:
 
 There were no duplicate dialogues. The script excluded 683 opening supporter
 utterances with no preceding history. Of 7,681 feedback annotations, 36 lacked
-an immediately preceding supporter utterance and were left unpaired. Overall,
-6,308 ratings were 4 or 5, which motivates a high-score baseline for Critic.
+an immediately preceding supporter utterance and were left unpaired. Of all
+ratings, 6,308 were 4 or 5, which motivates a high-score baseline for Critic.
 These are data counts, not model performance results.
 
 The RoBERTa-base smoke run completed on CPU with 16 training and 16 validation
