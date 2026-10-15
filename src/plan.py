@@ -1,4 +1,8 @@
-"""Train and serve Kaki's RoBERTa strategy planner. Run from repository root."""
+"""Train and serve Kaki's RoBERTa strategy planner. Run from repository root.
+
+With --input response the same classifier reads the supporter reply instead of the history. That model
+tags which strategy a reply carries out, and src/controllability.py uses it to check Speak.
+"""
 
 import argparse
 import json
@@ -39,7 +43,7 @@ class Planner:
         ]
 
 
-def loader(path, tokenizer, batch_size, shuffle=False, limit=None):
+def loader(path, tokenizer, batch_size, shuffle=False, limit=None, field="text"):
     with path.open(encoding="utf-8") as f:
         rows = [json.loads(line) for line in f]
     if limit:
@@ -49,7 +53,7 @@ def loader(path, tokenizer, batch_size, shuffle=False, limit=None):
 
     def collate(batch):
         tokens = tokenizer(
-            [r["text"] for r in batch],
+            [r[field] for r in batch],
             padding=True,
             truncation=True,
             max_length=512,
@@ -111,6 +115,12 @@ def main():
         default=0.0,
         help="Weight classes by (N / (K * n_c)) ** power from the training split; 0 disables",
     )
+    ap.add_argument(
+        "--input",
+        choices=["text", "response"],
+        default="text",
+        help="text: the history (Plan); response: the reply itself (strategy tagger)",
+    )
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument(
         "--evaluate-test",
@@ -135,7 +145,10 @@ def main():
         metrics = evaluate(
             planner.model,
             loader(
-                args.data / "responses_test.jsonl", planner.tokenizer, args.batch_size
+                args.data / "responses_test.jsonl",
+                planner.tokenizer,
+                args.batch_size,
+                field=args.input,
             ),
             device,
             labels,
@@ -161,6 +174,7 @@ def main():
         args.batch_size,
         True,
         16 if args.smoke else None,
+        args.input,
     )
     val = loader(
         args.data / "responses_val.jsonl",
@@ -168,6 +182,7 @@ def main():
         args.batch_size,
         False,
         16 if args.smoke else None,
+        args.input,
     )
     weights = None
     if args.class_weight_power:
