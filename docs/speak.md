@@ -80,5 +80,26 @@ Qwen model, two training rows and two validation rows. The saved conditioned
 adapter was reloaded and connected to the Plan smoke checkpoint, producing
 three nonempty candidates with strategy order and probabilities preserved.
 All ten repository tests passed. These checks establish functional integration;
-the smoke checkpoints are not suitable for reporting quality results. Full
-training, full-length GPU memory checks and human evaluation remain outstanding.
+the smoke checkpoints are not suitable for reporting quality results.
+
+## Training results
+
+Both adapters were trained with the defaults above on one RTX 3090. Training
+updates only the LoRA weights, which stay in fp32; the frozen Qwen weights load
+in bf16. Batch size one peaked at 3.8 GB of GPU memory; batch size eight ran out
+of memory on the 24 GB card at 1,024 tokens. Each run took 64 minutes.
+
+| Adapter | Validation loss, epochs 1 / 2 / 3 | Kept |
+| --- | --- | --- |
+| history | 2.612 / 2.616 / 2.639 | epoch 1 |
+| conditioned | 2.595 / 2.597 / 2.626 | epoch 1 |
+
+Both stop improving after one epoch. The conditioned adapter's lower loss means
+the reference reply is slightly easier to predict once the emotion and the
+reference strategy are given.
+
+In the full pipeline on a few handwritten messages, replies are short and
+fluent, and a look-ahead turn takes about 1.5 seconds on the GPU. Strategy
+control looks weak: a reply generated for one strategy often reads like
+another, and two strategies sometimes give the same reply. Measure this on
+test histories before relying on it. Test has not been evaluated.
