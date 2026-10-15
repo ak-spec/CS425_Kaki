@@ -105,6 +105,12 @@ def main():
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument(
+        "--class-weight-power",
+        type=float,
+        default=0.0,
+        help="Weight classes by (N / (K * n_c)) ** power from the training split; 0 disables",
+    )
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument(
         "--evaluate-test",
@@ -163,13 +169,27 @@ def main():
         False,
         16 if args.smoke else None,
     )
+    weights = None
+    if args.class_weight_power:
+        with (args.data / "responses_train.jsonl").open(encoding="utf-8") as f:
+            counts = np.bincount(
+                [json.loads(line)["label"] for line in f], minlength=len(labels)
+            ).clip(min=1)
+        weights = torch.tensor(
+            (counts.sum() / (len(labels) * counts)) ** args.class_weight_power,
+            dtype=torch.float,
+            device=device,
+        )
+    loss_fn = torch.nn.CrossEntropyLoss(weight=weights)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     best, records = -1, []
     for epoch in range(1 if args.smoke else args.epochs):
         model.train()
         for batch in train:
             optimizer.zero_grad()
-            loss = model(**{k: v.to(device) for k, v in batch.items()}).loss
+            batch = {k: v.to(device) for k, v in batch.items()}
+            target = batch.pop("labels")
+            loss = loss_fn(model(**batch).logits, target)
             if not torch.isfinite(loss):
                 raise RuntimeError("Non-finite training loss")
             loss.backward()
