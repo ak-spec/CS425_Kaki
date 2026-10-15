@@ -250,6 +250,37 @@ advance.
 In short, on posts from unseen users Guard catches about four in ten expert-labelled risk posts, and
 about half of what it flags is not a risk post. It must not be described as reliable crisis detection.
 
+### Where it fails: short posts
+
+Risk posts are about twice as long as other posts (median 97 against 47 words in validation), and the
+classifier has partly learnt length as a cue. Recall by post length:
+
+| Words | Val recall | Test recall | Non-risk flagged (val / test) |
+|---|---|---|---|
+| 30 or fewer | 0.20 | 0.26 | 2% / 2% |
+| 31-80 | 0.54 | 0.33 | 9% / 11% |
+| 81-200 | 0.55 | 0.64 | 11% / 20% |
+| over 200 | 0.91 | 0.43 | 36% / 38% |
+
+ESConv seeker turns have a median of 16 words, so chat messages fall in the bucket where Guard is
+weakest. Only 27% of risk posts contain an affirmed lexicon match, which limits what the lexicon can
+add.
+
+### Variants tried (validation only)
+
+Two changes aimed at the short-message problem were trained with five seeds each and compared on
+validation at the 2% cap. Neither was evaluated on test, because neither was adopted.
+
+| Variant | Val average precision | Recall | F1 | Recall, risk posts of 30 words or fewer |
+|---|---|---|---|---|
+| DistilRoBERTa, 512 tokens (used) | 0.737 +/- 0.006 | 0.58 +/- 0.04 | 0.637 +/- 0.024 | 0.22 |
+| RoBERTa-base, 512 tokens | 0.745 +/- 0.016 | 0.60 +/- 0.04 | 0.638 +/- 0.017 | 0.22 |
+| DistilRoBERTa, 128 tokens | 0.679 +/- 0.010 | 0.58 +/- 0.05 | 0.624 +/- 0.024 | 0.16 |
+
+RoBERTa-base matches DistilRoBERTa within seed variation at twice the size, and shorter inputs make
+things worse, including on short posts. The limit is the training data (long Reddit posts) rather than
+model capacity or input length, so the smaller model stays.
+
 ### Handwritten cases
 
 Seed-42 checkpoint on CPU. `bypass` is the final decision.
@@ -279,6 +310,19 @@ and misses indirect phrasing in short messages. The four failing trained-model t
 indirect escalations and the two negated statements. Because the lexicon can only lower the bar, its
 negation and quotation checks cannot overturn a high classifier score, and its indirect-ideation phrases
 cannot lift a score of 0.03.
+
+Five Singlish messages, as exploratory checks only (the training data is English Reddit text):
+
+| Group | Message | Score | Bypass |
+|---|---|---|---|
+| ordinary distress | Exams coming liao, damn stress, cannot sleep sia | 0.012 | no |
+| ordinary distress | My groupmates all never reply, I so sian already | 0.021 | no |
+| ambiguous | Sian until want to die, this project never end one | 0.163 | no |
+| escalation | I really cannot tahan anymore, everyone better off without me | 0.019 | **no** |
+| escalation | Tmr don't want to wake up liao | 0.008 | **no** |
+
+They follow the English pattern: ordinary distress passes, and indirect statements of risk are missed
+even when the lexicon matches them.
 
 Changes the team could consider, each needing a decision and a fresh validation run:
 
@@ -351,7 +395,8 @@ evidence of clinical reliability.
 ## Not tested
 
 - Real conversations with students, Singlish, and messages spread over several turns. The only
-  conversational evidence is the unlabelled ESConv bypass rate and 17 handwritten messages.
+  conversational evidence is the unlabelled ESConv bypass rate and 22 handwritten messages (5 in
+  Singlish).
 - Calibration of `model_score`.
 - Latency inside the full pipeline and on the demo machine; Guard was timed on its own on one laptop.
 - Whether the prepared response is helpful to someone in distress; it has not been reviewed by a
