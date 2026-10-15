@@ -3,8 +3,10 @@
 Run from the repository root: python -m unittest discover -s tests -v
 """
 import contextlib
+import csv
 import io
 import json
+import math
 import sys
 import tempfile
 import unittest
@@ -12,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from generate_outputs import generate, load_rows, row_turns
+from human_eval_sheet import CRITERIA, FIELDS, build, krippendorff_alpha, read_sheet, score
 from metrics import distinct, evaluate, latex, load_outputs, score_rows, words
 from pipeline import CONFIGS, Kaki
 from prep_downstream import history
@@ -230,6 +233,95 @@ class MetricsTests(unittest.TestCase):
             write_jsonl(Path(tmp, "planning.jsonl"), data["planning"][:1])
             with self.assertRaises(ValueError):
                 load_outputs(Path(tmp))
+
+
+# Krippendorff (2011), "Computing Krippendorff's Alpha-Reliability": 4 observers, 12 units, missing values.
+# Published: nominal 0.743, ordinal 0.815, interval 0.849.
+KRIPPENDORFF_2011 = [[1, 2, 3, 3, 2, 1, 4, 1, 2, None, None, None],
+                     [1, 2, 3, 3, 2, 2, 4, 1, 2, 5, None, 3],
+                     [None, 3, 3, 3, 2, 3, 4, 2, 2, 5, 1, None],
+                     [1, 2, 3, 3, 2, 4, 4, 1, 2, 5, 1, None]]
+
+
+def sheet_inputs():
+    contexts = [response_row(7, 3, TWO_SEEKER), response_row(9, 5, TWO_SEEKER)]
+    outputs = {c: {(r["dialogue_id"], r["utterance_idx"]): {"reply": f"{c} reply {r['dialogue_id']}"}
+                   for r in contexts} for c in CONFIGS}
+    return contexts, outputs
+
+
+def fill(sheet, key, rating_of):
+    """A filled copy of the sheet; rating_of(config, criterion) gives each rating."""
+    config_of = {(c["context"], label): config for c in key["contexts"] for label, config in c["labels"].items()}
+    return {(r["context"], r["label"]): {c: rating_of(config_of[r["context"], r["label"]], c) for c in CRITERIA}
+            for r in sheet}
+
+
+class HumanEvalTests(unittest.TestCase):
+    def test_alpha_matches_published_values(self):
+        units = [[row[j] for row in KRIPPENDORFF_2011 if row[j] is not None] for j in range(12)]
+        self.assertAlmostEqual(krippendorff_alpha(units, "nominal"), 0.743, places=3)
+        self.assertAlmostEqual(krippendorff_alpha(units, "ordinal"), 0.815, places=3)
+        self.assertAlmostEqual(krippendorff_alpha(units, "interval"), 0.849, places=3)
+        self.assertEqual(krippendorff_alpha([[1, 1], [3, 3], [5, 5]]), 1.0)
+        self.assertTrue(math.isnan(krippendorff_alpha([[4, 4], [4, 4]])))
+
+    def test_sheet_is_blinded_and_reproducible(self):
+        contexts, outputs = sheet_inputs()
+        sheet, key = build(contexts, outputs, seed=3)
+        self.assertEqual((sheet, key), build(contexts, outputs, seed=3))
+        self.assertEqual([(r["context"], r["label"]) for r in sheet], [(1, "A"), (1, "B"), (1, "C"),
+                                                                       (2, "A"), (2, "B"), (2, "C")])
+        self.assertTrue(sheet[0]["history"].startswith("Seeker: hi\nSupporter: Hello"))
+        self.assertEqual([r["history"] for r in sheet[1:3]], ["", ""])
+        for row in sheet:
+            config = key["contexts"][row["context"] - 1]["labels"][row["label"]]
+            self.assertTrue(row["reply"].startswith(config))
+            self.assertEqual(set(row), set(FIELDS))
+        self.assertEqual(sorted(key["contexts"][0]["labels"].values()), sorted(CONFIGS))
+        self.assertEqual((key["contexts"][1]["dialogue_id"], key["contexts"][1]["utterance_idx"]), (9, 5))
+        orders = {tuple(build(contexts, outputs, seed=s)[1]["contexts"][0]["labels"].values()) for s in range(20)}
+        self.assertGreater(len(orders), 1)
+
+    def test_read_sheet_rejects_missing_or_out_of_range_ratings(self):
+        contexts, outputs = sheet_inputs()
+        sheet, key = build(contexts, outputs)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "rater.csv"
+            with open(path, "w", encoding="utf-8-sig", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows([dict(r, relevance=4, acknowledgement="4.0", helpfulness=5, fluency=3)
+                                  for r in sheet])
+                f.write(",,,,,,,,\n")
+            ratings = read_sheet(path)
+            self.assertEqual(ratings[1, "A"], {"relevance": 4, "acknowledgement": 4, "helpfulness": 5, "fluency": 3})
+            self.assertEqual(len(ratings), 6)
+            with open(path, "a", encoding="utf-8", newline="") as f:
+                f.write("1,A,,reply,6,,3.5,2,\n")
+            with self.assertRaises(ValueError) as error:
+                read_sheet(path)
+            self.assertIn("relevance: '6'", str(error.exception))
+            self.assertIn("helpfulness: '3.5'", str(error.exception))
+
+    def test_scoring_unblinds_and_lists_disagreements(self):
+        contexts, outputs = sheet_inputs()
+        sheet, key = build(contexts, outputs)
+        level = {"direct": 2, "planning": 4, "lookahead": 5}
+        rater1 = fill(sheet, key, lambda config, c: level[config])
+        rater2 = fill(sheet, key, lambda config, c: level[config])
+        unit = next(u for u in rater2 if key["contexts"][u[0] - 1]["labels"][u[1]] == "direct")
+        rater2[unit]["fluency"] = 5
+        report = score([rater1, rater2], key)
+        self.assertEqual(report["means"]["planning"]["relevance"], 4)
+        self.assertEqual(report["means"]["direct"]["fluency"], 2.75)
+        self.assertEqual(report["means_per_rater"][1]["direct"]["fluency"], 3.5)
+        self.assertEqual(report["alpha_ordinal"]["relevance"], 1.0)
+        self.assertLess(report["alpha_ordinal"]["fluency"], 1.0)
+        self.assertEqual(report["disagreements"], [{"context": unit[0], "label": unit[1], "config": "direct",
+                                                    "criterion": "fluency", "ratings": [2, 5]}])
+        with self.assertRaises(ValueError):
+            score([rater1, {}], key)
 
 
 if __name__ == "__main__":
