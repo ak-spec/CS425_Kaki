@@ -1,0 +1,46 @@
+{
+ "train": {
+  "model_name": "distilroberta-base",
+  "max_len": 512,
+  "batch_size": 16,
+  "lr": 2e-05,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "epochs": 4,
+  "weight_power": 0.5,
+  "seed": 42
+ },
+ "selection": {
+  "max_bypass_rate": 0.02,
+  "esconv_dir": "data/processed",
+  "grid_step": 0.01
+ },
+ "inference": {
+  "context_turns": 1
+ },
+ "responses": {
+  "crisis_sg": {
+   "text": "It sounds like you may be going through something really painful, and you deserve support from a person right now. I'm a university prototype, not a counsellor, so please reach out to one of these:\n\n- If you might act on these thoughts or are in danger, call 995 or go to the nearest hospital Emergency Department (A&E).\n- Samaritans of Singapore (SOS): call 1767 or WhatsApp 9151 1767, 24 hours.\n- national mindline 1771: call 1771 or WhatsApp 6669 1771, 24 hours.\n\nIf you can, please also let someone you trust know how you are feeling.",
+   "verified_on": "2026-10-15",
+   "sources": [
+    {
+     "service": "Emergency",
+     "details": "995, or a hospital Emergency Department (A&E), if at risk of immediate harm",
+     "urls": ["https://www.mindline.sg/1771", "https://www.sos.org.sg/"]
+    },
+    {
+     "service": "Samaritans of Singapore (SOS)",
+     "details": "24-hour hotline 1767; 24-hour CareText 9151 1767 via WhatsApp",
+     "urls": ["https://www.sos.org.sg/"]
+    },
+    {
+     "service": "national mindline 1771 (MOH National Mental Health Office)",
+     "details": "call 1771; WhatsApp +65 6669 1771; web chat on mindline.sg; 24/7; not toll-free",
+     "urls": ["https://www.mindline.sg/1771",
+              "https://www.moh.gov.sg/newsroom/national-mindline-1771-to-provide--round-the-clock-support-for-mental-health/"]
+    }
+   ],
+   "excluded": "IMH Mental Health Helpline 6389 2222 is no longer listed on IMH's contact page, which directs 24/7 mental health support to national mindline 1771 (https://www.nhghealth.com.sg/imh/about-us/contact-us, checked 2026-10-15)."
+  }
+ }
+}
