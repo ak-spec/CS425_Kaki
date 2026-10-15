@@ -1,11 +1,13 @@
 """Blinded human evaluation of the three configurations on the contexts in configs/eval_contexts.json.
 
-build: one CSV row per (context, reply). Each context's three replies appear in a random order under the
-neutral labels A, B and C, and the history is shown on the context's first row. The key that maps labels
-to configurations goes to a separate file; raters only ever get a copy of the sheet.
-score: reads the raters' filled sheets and the key, unblinds, and reports each configuration's mean for
-each criterion, inter-rater agreement (Krippendorff's alpha, ordinal) and the ratings that differ by two
-or more points. Rubric and procedure: docs/evaluation.md.
+build: one CSV row per (context, distinct reply). A context's replies appear in a random order under the
+neutral labels A, B and C; when two configurations wrote the same reply it is shown once, so identical
+replies cannot reveal which system wrote which. The history is shown on the context's first row. The key
+that maps each label to its configurations goes to a separate file; raters only ever get the sheet.
+score: reads the raters' filled sheets and the key, unblinds (a shared reply's rating counts for every
+configuration that wrote it), and reports each configuration's mean for each criterion, inter-rater
+agreement (Krippendorff's alpha, ordinal) and the ratings that differ by two or more points. Rubric and
+procedure: docs/evaluation.md.
 
     python src/human_eval_sheet.py build      # data/human_eval/sheet.csv and data/human_eval/key.json
     python src/human_eval_sheet.py score --sheets data/human_eval/rater1.csv data/human_eval/rater2.csv
@@ -44,14 +46,16 @@ def build(contexts: list[dict], outputs: dict[str, dict], seed: int = 42) -> tup
         missing = [c for c in configs if ids not in outputs[c]]
         if missing:
             raise ValueError(f"no {missing} output for dialogue {ids[0]}, utterance {ids[1]}")
-        order = configs[:]
-        rng.shuffle(order)
-        labels = dict(zip(LABELS, order))
+        writers = {}  # reply text -> configurations that wrote it
+        for config in configs:
+            writers.setdefault(outputs[config][ids]["reply"], []).append(config)
+        groups = list(writers.items())
+        rng.shuffle(groups)
         key["contexts"].append({"context": number, "dialogue_id": ids[0], "utterance_idx": ids[1],
-                                "labels": labels})
-        for i, (label, config) in enumerate(labels.items()):
+                                "labels": {label: group for label, (_, group) in zip(LABELS, groups)}})
+        for i, (label, (reply, _)) in enumerate(zip(LABELS, groups)):
             sheet.append({"context": number, "label": label, "history": show_history(row["text"]) if i == 0 else "",
-                          "reply": outputs[config][ids]["reply"], **dict.fromkeys(CRITERIA, ""), "comment": ""})
+                          "reply": reply, **dict.fromkeys(CRITERIA, ""), "comment": ""})
     return sheet, key
 
 
@@ -113,15 +117,15 @@ def krippendorff_alpha(units: list[list], level: str = "ordinal") -> float:
 
 def score(sheets: list[dict], key: dict, gap: int = 2) -> dict:
     """Unblind the raters' sheets and summarise them."""
-    config_of = {(c["context"], label): config for c in key["contexts"] for label, config in c["labels"].items()}
+    configs_of = {(c["context"], label): group for c in key["contexts"] for label, group in c["labels"].items()}
     for i, sheet in enumerate(sheets, 1):
-        if set(sheet) != set(config_of):
+        if set(sheet) != set(configs_of):
             raise ValueError(f"sheet {i} does not have the contexts and labels in the key")
-    units = sorted(config_of)
-    configs = sorted(set(config_of.values()))
+    units = sorted(configs_of)
+    configs = sorted({config for group in configs_of.values() for config in group})
 
     def means(raters):
-        return {config: {c: mean(s[u][c] for s in raters for u in units if config_of[u] == config)
+        return {config: {c: mean(s[u][c] for s in raters for u in units if config in configs_of[u])
                          for c in CRITERIA} for config in configs}
 
     return {
@@ -129,7 +133,7 @@ def score(sheets: list[dict], key: dict, gap: int = 2) -> dict:
         "means": means(sheets),
         "means_per_rater": [means([s]) for s in sheets],
         "alpha_ordinal": {c: krippendorff_alpha([[s[u][c] for s in sheets] for u in units]) for c in CRITERIA},
-        "disagreements": [{"context": u[0], "label": u[1], "config": config_of[u], "criterion": c,
+        "disagreements": [{"context": u[0], "label": u[1], "configs": configs_of[u], "criterion": c,
                            "ratings": [s[u][c] for s in sheets]}
                           for u in units for c in CRITERIA
                           if max(s[u][c] for s in sheets) - min(s[u][c] for s in sheets) >= gap],
@@ -149,13 +153,9 @@ def main_build(args):
         writer.writeheader()
         writer.writerows(sheet)
     (folder / "key.json").write_text(json.dumps(key, indent=1), encoding="utf-8")
-    replies = [{outputs[c][(k["dialogue_id"], k["utterance_idx"])]["reply"] for c in CONFIGS}
-               for k in key["contexts"]]
-    same = sum(len(r) < len(CONFIGS) for r in replies)
-    print(json.dumps({"contexts": len(contexts), "sheet": str(folder / "sheet.csv"), "key": str(folder / "key.json"),
-                      "contexts_with_identical_replies": same}))
-    if same:
-        print("Some contexts have identical replies from different configurations; see docs/evaluation.md.")
+    same = sum(len(k["labels"]) < len(CONFIGS) for k in key["contexts"])
+    print(json.dumps({"contexts": len(contexts), "replies_to_rate": len(sheet), "sheet": str(folder / "sheet.csv"),
+                      "key": str(folder / "key.json"), "contexts_with_a_shared_reply": same}))
 
 
 def main_score(args):
@@ -171,7 +171,7 @@ def main_score(args):
     print(f"{'alpha (ord.)':<12}" + "".join(f"{report['alpha_ordinal'][c]:>17.3f}" for c in CRITERIA))
     print(f"\n{len(report['disagreements'])} ratings differ by {args.gap} or more points:")
     for d in report["disagreements"]:
-        print(f"  context {d['context']} reply {d['label']} ({d['config']}), {d['criterion']}: {d['ratings']}")
+        print(f"  context {d['context']} reply {d['label']} ({', '.join(d['configs'])}), {d['criterion']}: {d['ratings']}")
 
 
 def main():

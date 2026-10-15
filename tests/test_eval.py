@@ -264,7 +264,7 @@ def sheet_inputs():
 
 def fill(sheet, key, rating_of):
     """A filled copy of the sheet; rating_of(config, criterion) gives each rating."""
-    config_of = {(c["context"], label): config for c in key["contexts"] for label, config in c["labels"].items()}
+    config_of = {(c["context"], label): group[0] for c in key["contexts"] for label, group in c["labels"].items()}
     return {(r["context"], r["label"]): {c: rating_of(config_of[r["context"], r["label"]], c) for c in CRITERIA}
             for r in sheet}
 
@@ -287,12 +287,13 @@ class HumanEvalTests(unittest.TestCase):
         self.assertTrue(sheet[0]["history"].startswith("Seeker: hi\nSupporter: Hello"))
         self.assertEqual([r["history"] for r in sheet[1:3]], ["", ""])
         for row in sheet:
-            config = key["contexts"][row["context"] - 1]["labels"][row["label"]]
+            [config] = key["contexts"][row["context"] - 1]["labels"][row["label"]]
             self.assertTrue(row["reply"].startswith(config))
             self.assertEqual(set(row), set(FIELDS))
-        self.assertEqual(sorted(key["contexts"][0]["labels"].values()), sorted(CONFIGS))
+        self.assertEqual(sorted(g for group in key["contexts"][0]["labels"].values() for g in group), sorted(CONFIGS))
         self.assertEqual((key["contexts"][1]["dialogue_id"], key["contexts"][1]["utterance_idx"]), (9, 5))
-        orders = {tuple(build(contexts, outputs, seed=s)[1]["contexts"][0]["labels"].values()) for s in range(20)}
+        orders = {tuple(g[0] for g in build(contexts, outputs, seed=s)[1]["contexts"][0]["labels"].values())
+                  for s in range(20)}
         self.assertGreater(len(orders), 1)
 
     def test_read_sheet_rejects_missing_or_out_of_range_ratings(self):
@@ -322,7 +323,7 @@ class HumanEvalTests(unittest.TestCase):
         level = {"direct": 2, "planning": 4, "lookahead": 5}
         rater1 = fill(sheet, key, lambda config, c: level[config])
         rater2 = fill(sheet, key, lambda config, c: level[config])
-        unit = next(u for u in rater2 if key["contexts"][u[0] - 1]["labels"][u[1]] == "direct")
+        unit = next(u for u in rater2 if key["contexts"][u[0] - 1]["labels"][u[1]] == ["direct"])
         rater2[unit]["fluency"] = 5
         report = score([rater1, rater2], key)
         self.assertEqual(report["means"]["planning"]["relevance"], 4)
@@ -330,10 +331,24 @@ class HumanEvalTests(unittest.TestCase):
         self.assertEqual(report["means_per_rater"][1]["direct"]["fluency"], 3.5)
         self.assertEqual(report["alpha_ordinal"]["relevance"], 1.0)
         self.assertLess(report["alpha_ordinal"]["fluency"], 1.0)
-        self.assertEqual(report["disagreements"], [{"context": unit[0], "label": unit[1], "config": "direct",
+        self.assertEqual(report["disagreements"], [{"context": unit[0], "label": unit[1], "configs": ["direct"],
                                                     "criterion": "fluency", "ratings": [2, 5]}])
         with self.assertRaises(ValueError):
             score([rater1, {}], key)
+
+    def test_identical_replies_are_shown_once_and_credited_to_each_writer(self):
+        contexts, outputs = sheet_inputs()
+        for ids in outputs["lookahead"]:
+            outputs["lookahead"][ids] = dict(outputs["planning"][ids])
+        sheet, key = build(contexts, outputs)
+        self.assertEqual(len(sheet), 4)  # two distinct replies per context
+        groups = sorted(sorted(g) for g in key["contexts"][0]["labels"].values())
+        self.assertEqual(groups, [["direct"], ["lookahead", "planning"]])
+        ratings = {(r["context"], r["label"]): dict.fromkeys(CRITERIA, 3 if r["reply"].startswith("direct") else 5)
+                   for r in sheet}
+        report = score([ratings, ratings], key)
+        self.assertEqual((report["means"]["planning"]["relevance"], report["means"]["lookahead"]["relevance"],
+                          report["means"]["direct"]["relevance"]), (5, 5, 3))
 
 
 class CompareTests(unittest.TestCase):
