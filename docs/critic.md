@@ -60,14 +60,60 @@ that goes against that trend, and cannot tell the real reply from one taken from
 
 For Kaki this matters directly. The three look-ahead candidates share one history, so anything learnt
 from the history cancels out, and the reply-dependent part of the score is close to noise. Selecting by
-this Critic, or scoring systems with this Eval-Critic, would not measure reply quality. Until the target
-changes, `src/pipeline.py` ranks candidates by planner probability, and comparisons between
-configurations should rely on reference metrics and the human evaluation.
+this Critic, or scoring systems with this Eval-Critic, would not measure reply quality, and without a
+Critic look-ahead sends the same reply as planning. Hence the reply-contrast training below.
 
-## Options (team decision)
+## Reply-contrast training
 
-- **Reply-contrast training.** Add pairs where the same history gets its real reply and a reply from
-  another dialogue, and require the real reply to score higher, alongside the rating target. This forces
+`--contrast-weight 1.0` adds a margin loss: for the same history, the real reply must score at least one
+rating point above a reply taken from another training dialogue. Two forward passes per example did not
+fit in 24 GB at batch 16, so these runs use batch 8 (the same 16 sequences per step).
+
+| Validation | Critic | Critic, contrast | Eval-Critic | Eval-Critic, contrast |
+|---|---|---|---|---|
+| Kept epoch | 3 | 1 | 1 | 2 |
+| Mean absolute error (constant: 0.734) | 0.676 | 0.717 | 0.676 | 0.738 |
+| Spearman with rating | 0.22 | 0.15 | 0.27 | 0.18 |
+| Pairwise accuracy (position baseline: 0.710) | 0.684 | 0.636 | 0.705 | 0.639 |
+| Pairs against the trend | 0.082 | 0.282 | 0.055 | 0.268 |
+| Real reply above another dialogue's | 0.484 | 0.912 | 0.543 | 0.952 |
+
+The contrast Critics read the reply: they prefer the real reply over a swapped one more than nine times
+in ten, on validation dialogues they were not trained on, and they do far better on the pairs that go
+against the conversation's trend. Overall pairwise accuracy and rating error get slightly worse, because
+the earlier Critics earned those numbers mainly from position. The swapped-reply check is now part of
+the training objective, so it shows that the score depends on the reply, not that it measures
+helpfulness.
+
+## Look-ahead weight (validation)
+
+`src/tune_lookahead.py` generated the three look-ahead candidates for the 1,411 validation histories
+that end with a seeker turn (1,387 after Guard bypasses), scored them with the contrast Critic, and
+chose the weight in critic score + weight * planner probability by the BERTScore F1 of the selected
+reply against the reference (roberta-large, layer 17, rescaled).
+
+| Weight | BERTScore F1 | Differs from planning |
+|---|---|---|
+| 0 (Critic alone) | 0.1898 | 52.5% |
+| 0.25 | 0.1873 | 38.0% |
+| 0.5 | 0.1858 | 31.7% |
+| 1 | 0.1861 | 24.4% |
+| 2 | 0.1871 | 16.7% |
+| 4 | 0.1858 | 9.6% |
+| 8 | 0.1845 | 6.0% |
+| planner probability only (planning) | 0.1844 | 0% |
+
+The chosen rule lets Plan pick the three strategies and the Critic alone pick among their replies. Its
+gain over planning is small: +0.0053 F1, 95% bootstrap interval [0.000, 0.011] over histories. It is
+adopted because it is the best validation setting and makes look-ahead a different system from
+planning in about half of the turns; whether the replies it picks are better is for the human
+evaluation to show. The weight is saved in the Critic's `lookahead.json`. For the pipeline and the
+demo, put the contrast Critic in `checkpoints/critic`; `Kaki.load` then uses it with that weight.
+
+## Other options
+
+- **Reply-contrast training** (adopted above). Add pairs where the same history gets its real reply and a
+  reply from another dialogue, and require the real reply to score higher, alongside the rating target. This forces
   the Critic to read the reply; it measures fit to the context rather than seeker-rated helpfulness, and
   the "another dialogue" check above would no longer be a fair test.
 - **Remove the history-level part of the target.** Subtract each dialogue's mean rating and the
@@ -75,5 +121,4 @@ configurations should rely on reference metrics and the human evaluation.
 - **Interval target.** Use the full two-utterance interval each rating covers, as the audit suggests.
   Likely more faithful to the labels, but it does not address the position effect.
 
-Whichever is chosen should be compared on validation with the checks above before the test split is
-used. Test has not been evaluated for either Critic.
+Any further change should be compared on validation with the same checks before the test split is used.

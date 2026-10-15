@@ -27,8 +27,8 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Guard (`src/guard.py`) | trained and evaluated |
 | Plan (`src/plan.py`) | trained: validation accuracy 0.33, top-three coverage 0.64 (see `docs/plan.md`) |
 | Speak (`src/speak.py`, `src/train_speak.py`) | both adapters trained (see `docs/speak.md`) |
-| Critique (`src/critic.py`, `src/train_critic.py`) | Critic and Eval-Critic trained on feedback ratings; they do not yet judge replies (see `docs/critic.md`) |
-| Pipeline (`src/pipeline.py`) | Guard, Perceive, Plan and Speak connected; ranks candidates by planner probability for now |
+| Critique (`src/critic.py`, `src/train_critic.py`) | reply-contrast Critic and Eval-Critic trained; look-ahead weight chosen on validation (see `docs/critic.md`) |
+| Pipeline (`src/pipeline.py`) | all stages connected; the Critic chooses among the top three candidates |
 | Evaluation (`src/select_eval_contexts.py`, `src/generate_outputs.py`, `src/metrics.py`, `src/human_eval_sheet.py`) | built; 20 human-evaluation contexts fixed; outputs pending (see `docs/evaluation.md`) |
 | Demo (`app.py`) | built and checked with stand-in models; real checkpoints pending (see `docs/demo.md`) |
 | Simulator | not started |
