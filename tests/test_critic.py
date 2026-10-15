@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from critic import to_rating, to_target
 from train_critic import evaluate, other_replies, pair_accuracy, rating_pairs, split_halves
+from tune_lookahead import paired_interval, select, sweep
 
 
 def row(dialogue, start, rating, reply="ok"):
@@ -46,6 +47,26 @@ class CriticHelperTests(unittest.TestCase):
         self.assertEqual(m["pairwise_position_baseline"], 0.5)
         self.assertEqual(m["against_trend_accuracy"], 0.5)
         self.assertEqual(m["beats_other_reply"], 1.0)
+
+    def test_lookahead_selection_weights(self):
+        cands = [{"planner_probability": 0.5, "critic_score": 4.0},
+                 {"planner_probability": 0.3, "critic_score": 4.3},
+                 {"planner_probability": 0.1, "critic_score": 4.1}]
+        self.assertEqual(select(cands, None), 0)  # planner only
+        self.assertEqual(select(cands, 0.0), 1)   # critic only
+        self.assertEqual(select(cands, 1.0), 1)   # 4.6 beats 4.5
+        self.assertEqual(select(cands, 4.0), 0)   # 6.0 beats 5.5
+
+    def test_sweep_reports_score_and_disagreement(self):
+        cands = [{"planner_probability": 0.5, "critic_score": 4.0},
+                 {"planner_probability": 0.3, "critic_score": 4.3},
+                 {"planner_probability": 0.1, "critic_score": 4.1}]
+        table = {t["weight"]: t for t in sweep([{"candidates": cands}], [[0.1, 0.4, 0.2]])}
+        self.assertEqual((table["planner only"]["bertscore_f1"], table["planner only"]["differs_from_planning"]), (0.1, 0.0))
+        self.assertEqual((table[0.0]["bertscore_f1"], table[0.0]["differs_from_planning"]), (0.4, 1.0))
+        lo, hi = paired_interval([0.1] * 20)
+        self.assertAlmostEqual(lo, 0.1)
+        self.assertAlmostEqual(hi, 0.1)
 
     def test_rating_scale_round_trip(self):
         for rating in (1, 3, 5):
