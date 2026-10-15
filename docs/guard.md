@@ -22,8 +22,6 @@ python src/train_guard.py --output checkpoints/guard
 python src/train_guard.py --output checkpoints/guard --evaluate-test     # once, after thresholds are fixed
 ```
 
-On Windows, run `src/prep.py` with `PYTHONUTF8=1` set (see Integration notes).
-
 Two optional modes work on a trained checkpoint:
 
 - `--select` re-selects the thresholds on validation without retraining, for example after changing
@@ -386,11 +384,6 @@ evidence of clinical reliability.
 - **Training hardware.** On a 4-core laptop CPU one epoch at 512 tokens took more than 15 minutes; on
   the SCIS GPU cluster it takes seconds. Cluster job scripts are kept out of the repository because they hold
   account details.
-- **`src/prep.py` on Windows** (not changed here; reported for whoever owns it):
-  - `Path.read_text()` without `encoding="utf-8"` fails on ESConv under the default Windows code page.
-    Running with `PYTHONUTF8=1` works around it.
-  - `write_text` writes CRLF on Windows, so the `splits.json` fingerprint printed by the Perceive
-    notebook differs (`4532260fd655` instead of `dd619339a81a`) even though the splits are identical.
 
 ## Not tested
 
