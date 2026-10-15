@@ -17,6 +17,9 @@ SYSTEM_PROMPT = (
 )
 
 
+ZERO_SHOT = {"base_model": BASE_MODEL, "mode": "history", "max_length": 1024, "max_reply_tokens": 128}
+
+
 def prompt_ids(tokenizer, history, mode, emotion=None, strategy=None, max_tokens=896):
     """Trim history from the left while preserving instructions and chat markers."""
     if not isinstance(history, str) or not history.strip():
@@ -81,11 +84,18 @@ def collate_examples(rows, pad_token_id):
 
 class Speaker:
     def __init__(self, checkpoint, device=None):
+        """checkpoint=None loads the base model without an adapter: the zero-shot baseline, prompted
+        like the history-only adapter."""
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        if checkpoint is None:
+            self.config = dict(ZERO_SHOT)
+            self.tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+            self.model = AutoModelForCausalLM.from_pretrained(BASE_MODEL).to(self.device).eval()
+            return
         checkpoint = Path(checkpoint)
         self.config = json.loads(
             (checkpoint / "speak_config.json").read_text(encoding="utf-8")
         )
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         base = AutoModelForCausalLM.from_pretrained(self.config["base_model"])
         self.model = PeftModel.from_pretrained(base, checkpoint).to(self.device).eval()
@@ -112,6 +122,36 @@ class Speaker:
         return self.tokenizer.decode(
             output[0, len(ids) :], skip_special_tokens=True
         ).strip()
+
+    @torch.inference_mode()
+    def generate_batch(self, histories, emotions=None, strategies=None, batch_size=16):
+        """Greedy replies for many prompts at once, left-padded. Same prompts as generate; padding can
+        change a reply slightly, so the three configurations use generate one turn at a time."""
+        emotions = emotions or [None] * len(histories)
+        strategies = strategies or [None] * len(histories)
+        budget = self.config["max_length"] - self.config["max_reply_tokens"]
+        prompts = [prompt_ids(self.tokenizer, h, self.config["mode"], e, s, budget)
+                   for h, e, s in zip(histories, emotions, strategies)]
+        order = sorted(range(len(prompts)), key=lambda i: len(prompts[i]))
+        replies = [None] * len(prompts)
+        pad = self.tokenizer.pad_token_id
+        for start in range(0, len(order), batch_size):
+            idx = order[start : start + batch_size]
+            width = max(len(prompts[i]) for i in idx)
+            ids = torch.tensor([[pad] * (width - len(prompts[i])) + prompts[i] for i in idx], device=self.device)
+            mask = torch.tensor([[0] * (width - len(prompts[i])) + [1] * len(prompts[i]) for i in idx],
+                                device=self.device)
+            output = self.model.generate(
+                input_ids=ids,
+                attention_mask=mask,
+                do_sample=False,
+                max_new_tokens=self.config["max_reply_tokens"],
+                pad_token_id=pad,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+            for i, row in zip(idx, output[:, width:]):
+                replies[i] = self.tokenizer.decode(row, skip_special_tokens=True).strip()
+        return replies
 
     def generate_candidates(self, history, emotion, strategies):
         """Keep planner order and probabilities; selection belongs to Critique."""
