@@ -12,7 +12,7 @@ turns. Rows already in an output file are skipped, so an interrupted run resumes
     python src/generate_outputs.py --configs direct --limit 5              # quick check
 
 Needs the trained checkpoints (guard, perceive, plan, speak-history, speak-conditioned) and, for the full
-test split, a GPU.
+test split, a GPU. --critic adds a Critic checkpoint for look-ahead selection.
 """
 import argparse
 import json
@@ -119,13 +119,20 @@ def main():
     ap.add_argument("--contexts", type=Path, help="only these rows, e.g. configs/eval_contexts.json")
     ap.add_argument("--configs", nargs="+", choices=CONFIGS, default=list(CONFIGS))
     ap.add_argument("--checkpoints", type=Path, default=ROOT / "checkpoints")
+    ap.add_argument("--critic", type=Path, help="Critic checkpoint for look-ahead; without it look-ahead "
+                                                  "ranks candidates by planner probability")
+    ap.add_argument("--critic-weight", type=float, default=1.0)
     ap.add_argument("--output", type=Path, default=ROOT / "data/outputs")
     ap.add_argument("--limit", type=int, help="first N rows only, for quick checks")
     ap.add_argument("--overwrite", action="store_true", help="discard existing outputs instead of resuming")
     args = ap.parse_args()
     rows = load_rows(args.data, args.contexts, args.limit)
     dialogues = json.loads(args.raw.read_text(encoding="utf-8")) if args.raw.exists() else None
-    kaki = Kaki.load(args.checkpoints, configs=args.configs)
+    critic = None
+    if args.critic:
+        from critic import Critic
+        critic = Critic(args.critic)
+    kaki = Kaki.load(args.checkpoints, configs=args.configs, critic=critic, critic_weight=args.critic_weight)
     written = generate(kaki, rows, args.configs, args.output, dialogues, args.overwrite)
     run = {"args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
            "rows": len(rows), "written": written, "turns_from": "raw" if dialogues else "history string"}
