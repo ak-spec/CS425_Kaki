@@ -7,5 +7,7 @@ __pycache__/
 # data (ESConv is academic-use only; regenerate with src/prep.py) and run outputs
 data/raw/
 data/processed/
+data/outputs/
+data/human_eval/
 checkpoints/
 *.pt
