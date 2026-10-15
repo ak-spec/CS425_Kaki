@@ -139,4 +139,6 @@ Providing Suggestions, Question and Restatement or Paraphrasing. The reference
 strategy is among the top three 64% of the time.
 
 The default checkpoint was then evaluated once on test (1,770 examples): accuracy
-0.321, macro-F1 0.202, top-three coverage 0.651, in line with validation.
+0.321, macro-F1 0.202, weighted-F1 0.248, top-three coverage 0.651, in line with validation.
+Given the reference strategy instead, the conditioned Speak adapter's replies gain 2.4 BERTScore points
+(`src/ablations.py`, `docs/results.md`), so a better planner is the most direct way to improve planning.
