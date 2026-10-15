@@ -12,9 +12,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from generate_outputs import generate, load_rows, row_turns
+from metrics import distinct, evaluate, latex, load_outputs, score_rows, words
 from pipeline import CONFIGS, Kaki
 from prep_downstream import history
 from select_eval_contexts import eligible, history_turns, read_jsonl, select
+
+
+def write_jsonl(path, rows):
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
 
 def response_row(dialogue, idx, text, problem="academic pressure", in_scope=True):
@@ -149,7 +154,7 @@ class GenerateTests(unittest.TestCase):
         rows = test_rows()
         with tempfile.TemporaryDirectory() as tmp:
             data, contexts = Path(tmp) / "responses.jsonl", Path(tmp) / "contexts.json"
-            data.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+            write_jsonl(data, rows)
             contexts.write_text(json.dumps({"contexts": [{"dialogue_id": 0, "utterance_idx": 4},
                                                          {"dialogue_id": 0, "utterance_idx": 1}]}), encoding="utf-8")
             self.assertEqual([r["utterance_idx"] for r in load_rows(data, contexts)], [4, 1])
@@ -157,6 +162,74 @@ class GenerateTests(unittest.TestCase):
             contexts.write_text(json.dumps({"contexts": [{"dialogue_id": 5, "utterance_idx": 1}]}), encoding="utf-8")
             with self.assertRaises(ValueError):
                 load_rows(data, contexts)
+
+
+
+def output_row(config, idx, reply, strategy=None, bypassed=False, after_seeker=True):
+    return {"dialogue_id": 1, "utterance_idx": idx, "config": config, "reply": reply,
+            "reference": "that sounds hard", "reference_strategy": "Question", "strategy": strategy,
+            "bypassed": bypassed, "after_seeker": after_seeker}
+
+
+def output_data():
+    return {
+        "direct": [output_row("direct", 1, "that sounds hard"), output_row("direct", 2, "ok ok", after_seeker=False),
+                   output_row("direct", 3, "prepared", bypassed=True)],
+        "planning": [output_row("planning", 1, "that sounds hard", "Question"),
+                     output_row("planning", 2, "why", "Others", after_seeker=False),
+                     output_row("planning", 3, "prepared", bypassed=True)],
+    }
+
+
+class MetricsTests(unittest.TestCase):
+    def test_words_and_distinct(self):
+        self.assertEqual(words("I'm OK, really!"), ["i'm", "ok", "really"])
+        self.assertAlmostEqual(distinct(["a b a", "b c"], 1), 3 / 5)
+        self.assertAlmostEqual(distinct(["a b a", "b c"], 2), 1.0)
+        self.assertEqual(distinct(["a"], 2), 0.0)
+
+    def test_identical_replies_score_full_marks(self):
+        reply = "that sounds really hard for you"  # BLEU-4 needs four-word n-grams
+        rows = [dict(output_row("planning", i, reply, "Question"), reference=reply, bertscore=0.9) for i in range(3)]
+        m = score_rows(rows)
+        self.assertAlmostEqual(m["bleu2"], 100)
+        self.assertAlmostEqual(m["bleu4"], 100)
+        self.assertAlmostEqual(m["rouge_l"], 100)
+        self.assertAlmostEqual(m["bertscore_f1"], 90)
+        self.assertAlmostEqual(m["strategy_acc"], 100)
+        self.assertEqual(m["length"], 6)
+
+    def test_subsets_bypass_and_strategy_accuracy(self):
+        calls = []
+
+        def fake_bertscore(replies, references):
+            calls.append(len(replies))
+            return [0.5] * len(replies)
+
+        results = {(r["subset"], r["config"]): r for r in evaluate(output_data(), fake_bertscore)}
+        self.assertEqual(calls, [2, 2])  # bypassed rows are not scored
+        self.assertEqual((results["all", "direct"]["n"], results["all", "direct"]["bypassed"]), (2, 1))
+        self.assertIsNone(results["all", "direct"]["strategy_acc"])
+        self.assertAlmostEqual(results["all", "planning"]["strategy_acc"], 50)
+        self.assertAlmostEqual(results["after_seeker", "planning"]["strategy_acc"], 100)
+        self.assertEqual(results["after_seeker", "planning"]["n"], 1)
+        self.assertAlmostEqual(results["all", "planning"]["bertscore_f1"], 50)
+        self.assertEqual(results["all", "reference"]["length"], 3)
+        self.assertNotIn("bleu2", results["all", "reference"])
+        table = latex(list(results.values()), "all", "BERTScore F1: test.")
+        self.assertIn("Planning & ", table)
+        self.assertIn(r"\label{tab:metrics-all}", table)
+        self.assertIn("2 replies per configuration", table)
+
+    def test_configurations_must_cover_the_same_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = output_data()
+            for config, rows in data.items():
+                write_jsonl(Path(tmp, f"{config}.jsonl"), rows)
+            self.assertEqual(sorted(load_outputs(Path(tmp))), ["direct", "planning"])
+            write_jsonl(Path(tmp, "planning.jsonl"), data["planning"][:1])
+            with self.assertRaises(ValueError):
+                load_outputs(Path(tmp))
 
 
 if __name__ == "__main__":

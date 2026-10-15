@@ -8,3 +8,6 @@ peft==0.21.2
 accelerate==1.15.0
 sentencepiece==0.2.2
 protobuf==7.36.2
+sacrebleu==2.6.0
+rouge-score==0.1.2
+bert-score==0.3.13
