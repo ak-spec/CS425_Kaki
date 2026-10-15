@@ -67,12 +67,11 @@ that Plan and Speak were trained on; this holds for all train, validation and te
 the history string is split back into turns. `after_seeker` marks rows whose history ends with a seeker
 message, the subset `docs/plan.md` asks to report separately.
 
-**Look-ahead currently equals planning.** Without a Critic, look-ahead picks the candidate for the planner's
-top strategy. With greedy decoding and the same adapter, that candidate is the planning reply, so the two
-configurations give identical replies and metrics. The comparison between them becomes informative once a
-working Critic is passed with `--critic checkpoints/critic` (and `--critic-weight`). Write to a new `--output`
-folder, or use `--overwrite`, whenever checkpoints or the Critic change, because resumed rows are not
-regenerated.
+**Look-ahead needs the Critic.** Without one, look-ahead picks the candidate for the planner's top strategy,
+which with greedy decoding is the planning reply. The reported run passes the reply-contrast Critic with the
+weight chosen on validation (`--critic checkpoints/critic-contrast --critic-weight 0`, see `docs/critic.md`);
+look-ahead then differs from planning in about half of the turns. Write to a new `--output` folder, or use
+`--overwrite`, whenever checkpoints or the Critic change, because resumed rows are not regenerated.
 
 ## Automatic metrics
 
@@ -173,19 +172,19 @@ Krippendorff (2011), which gives 0.743 (nominal), 0.815 (ordinal) and 0.849 (int
 at least 0.8 supports conclusions and 0.667 to 0.8 only tentative ones. With 20 contexts and two raters,
 small differences between means are inconclusive.
 
-`build` prints `contexts_with_identical_replies`. While look-ahead equals planning (see Generation), every
-context has two identical replies, which lets raters tell which reply is the direct one. Run the human
-evaluation after look-ahead has its own selector, or state in the report that planning and look-ahead were
-the same system in that run.
+Configurations often write the same reply: look-ahead keeps the planning reply in about half of the turns, and
+greedy decoding sometimes makes direct and planning agree. `build` shows each distinct reply once per context,
+so a context may have only one or two replies to rate, and the key credits a shared reply's rating to every
+configuration that wrote it. Showing duplicates would let raters guess which reply came from which system.
+`build` prints how many contexts have a shared reply; in the reported run, 16 of the 20.
 
 ## Not used: the Eval-Critic
 
-The proposal planned an independent Eval-Critic to score all configurations. `docs/critic.md` shows that the
-current Critic and Eval-Critic learn the dialogue history and largely ignore the reply: they cannot tell the
-real reply from a reply taken from another dialogue (0.48 and 0.54, chance is 0.5). Eval-Critic scores would
-therefore not measure reply quality, and they are not part of this evaluation. If the Critic target changes
-and the Eval-Critic passes the checks in `docs/critic.md` on validation, its scores can be added as another
-column.
+The proposal planned an independent Eval-Critic to score all configurations. Trained on ratings alone, the
+Critics ignore the reply (`docs/critic.md`). The reply-contrast Eval-Critic does read the reply, but what it
+learnt is fit to the context rather than helpfulness (Spearman with test ratings 0.18), and it shares its
+training objective with the Critic that selects look-ahead replies, so its scores would favour look-ahead by
+construction. It is therefore not used to compare the configurations; the human evaluation is.
 
 ## References
 
