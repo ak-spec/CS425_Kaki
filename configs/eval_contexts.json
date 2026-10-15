@@ -1,0 +1,101 @@
+{
+ "seed": 42,
+ "source": "data/processed/downstream/responses_test.jsonl",
+ "splits_sha256": "dd619339a81a",
+ "rule": {
+  "split": "test",
+  "one_row_per_dialogue": true,
+  "history_ends_with": "seeker",
+  "min_seeker_turns": 2,
+  "min_seeker_words": 20,
+  "max_history_words": 250,
+  "problems_in_turn": [
+   "academic pressure",
+   "problems with friends"
+  ],
+  "then": "other in-scope problems",
+  "uses_reference_reply": false
+ },
+ "contexts": [
+  {
+   "dialogue_id": 23,
+   "utterance_idx": 5
+  },
+  {
+   "dialogue_id": 58,
+   "utterance_idx": 11
+  },
+  {
+   "dialogue_id": 136,
+   "utterance_idx": 13
+  },
+  {
+   "dialogue_id": 162,
+   "utterance_idx": 10
+  },
+  {
+   "dialogue_id": 290,
+   "utterance_idx": 6
+  },
+  {
+   "dialogue_id": 387,
+   "utterance_idx": 5
+  },
+  {
+   "dialogue_id": 454,
+   "utterance_idx": 7
+  },
+  {
+   "dialogue_id": 459,
+   "utterance_idx": 9
+  },
+  {
+   "dialogue_id": 477,
+   "utterance_idx": 10
+  },
+  {
+   "dialogue_id": 549,
+   "utterance_idx": 7
+  },
+  {
+   "dialogue_id": 587,
+   "utterance_idx": 10
+  },
+  {
+   "dialogue_id": 708,
+   "utterance_idx": 6
+  },
+  {
+   "dialogue_id": 774,
+   "utterance_idx": 15
+  },
+  {
+   "dialogue_id": 784,
+   "utterance_idx": 8
+  },
+  {
+   "dialogue_id": 802,
+   "utterance_idx": 16
+  },
+  {
+   "dialogue_id": 1042,
+   "utterance_idx": 10
+  },
+  {
+   "dialogue_id": 1047,
+   "utterance_idx": 22
+  },
+  {
+   "dialogue_id": 1072,
+   "utterance_idx": 6
+  },
+  {
+   "dialogue_id": 1134,
+   "utterance_idx": 26
+  },
+  {
+   "dialogue_id": 1258,
+   "utterance_idx": 5
+  }
+ ]
+}
