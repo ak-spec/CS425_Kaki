@@ -1,4 +1,5 @@
-"""Reference-based metrics for each configuration's replies in data/outputs/{config}.jsonl.
+"""Reference-based metrics for each configuration's replies in data/outputs/{config}.jsonl, and for the
+baselines in src/baselines.py when their files exist.
 
 Against the reference supporter reply: BLEU-2 and BLEU-4 (corpus-level sacrebleu, lowercased, 13a
 tokens), ROUGE-L F1 (rouge-score, no stemming, mean over replies) and BERTScore F1 (bert-score, mean over
@@ -24,6 +25,7 @@ from importlib.metadata import version
 from pathlib import Path
 from statistics import mean
 
+from baselines import SYSTEMS as BASELINES
 from pipeline import CONFIGS
 from select_eval_contexts import read_jsonl
 
@@ -32,7 +34,9 @@ WORD = re.compile(r"[\w']+")
 BLEU_SETTINGS = {"lowercase": True, "tokenize": "13a"}
 COLUMNS = [("bleu2", "BLEU-2"), ("bleu4", "BLEU-4"), ("rouge_l", "ROUGE-L"), ("bertscore_f1", "BERTScore"),
            ("distinct1", "D-1"), ("distinct2", "D-2"), ("length", "Length"), ("strategy_acc", "Strategy acc.")]
-NAMES = {"direct": "Direct", "planning": "Planning", "lookahead": "Look-ahead", "reference": "Reference"}
+SYSTEMS = (*CONFIGS, *BASELINES)
+NAMES = {"direct": "Direct", "planning": "Planning", "lookahead": "Look-ahead", "zeroshot": "Qwen zero-shot",
+         "blenderbot": "BlenderBot-small", "reference": "Reference"}
 SUBSETS = {"all": "all test rows", "after_seeker": "rows whose history ends with a seeker message"}
 
 
@@ -94,8 +98,8 @@ def reference_row(rows: list[dict]) -> dict:
             "length": mean(len(words(x)) for x in refs)}
 
 
-def load_outputs(folder: Path, configs=CONFIGS) -> dict[str, list[dict]]:
-    """Rows per configuration; every configuration must cover the same test rows."""
+def load_outputs(folder: Path, configs=SYSTEMS) -> dict[str, list[dict]]:
+    """Rows per system that has an output file; every system must cover the same test rows."""
     data = {c: read_jsonl(folder / f"{c}.jsonl") for c in configs if (folder / f"{c}.jsonl").exists()}
     if not data:
         raise FileNotFoundError(f"no {{config}}.jsonl in {folder}; run src/generate_outputs.py first")
@@ -156,7 +160,8 @@ def latex(results: list[dict], subset: str, bertscore_note: str) -> str:
 def main():
     ap = argparse.ArgumentParser(description="Reference-based metrics for each configuration.")
     ap.add_argument("--outputs", type=Path, default=ROOT / "data/outputs")
-    ap.add_argument("--configs", nargs="+", choices=CONFIGS, default=list(CONFIGS))
+    ap.add_argument("--configs", nargs="+", choices=SYSTEMS, default=list(SYSTEMS),
+                    help="systems to score; those without an output file are skipped")
     ap.add_argument("--bertscore-model", default="roberta-large")
     ap.add_argument("--bertscore-layer", type=int, default=17)
     ap.add_argument("--no-rescale", action="store_true", help="raw BERTScore instead of baseline-rescaled")
@@ -192,7 +197,7 @@ def main():
     (args.outputs / "metrics.json").write_text(json.dumps({"settings": settings, "results": results}, indent=1),
                                                encoding="utf-8")
     for r in results:
-        print(f"{r['subset']:<13}{r['config']:<11}n={r['n']:<5}"
+        print(f"{r['subset']:<13}{r['config']:<12}n={r['n']:<5}"
               + " ".join(f"{k}={fmt(r.get(k))}" for k, _ in COLUMNS))
 
 
