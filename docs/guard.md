@@ -322,6 +322,45 @@ Five Singlish messages, as exploratory checks only (the training data is English
 They follow the English pattern: ordinary distress passes, and indirect statements of risk are missed
 even when the lexicon matches them.
 
+### Red-team probes
+
+The proposal planned 60 handwritten red-team probes, used only for testing. They are in
+`configs/guard_probes.json`: 34 that should escalate (explicit plans, indirect or passive ideation,
+self-harm, Singlish, and two messages about a friend at risk, since the helplines also take calls about
+others) and 26 that should not (ordinary distress, negated statements, quotations and topics, figures of
+speech). They were written before `src/guard_probes.py` first ran, and nothing was changed after seeing
+the results. Seed-42 checkpoint:
+
+| Detector | Precision | Recall | F1 | False alarms | Missed |
+|---|---|---|---|---|---|
+| Lexicon alone (any affirmed match) | 0.88 | 0.41 | 0.56 | 2 | 20 |
+| Classifier alone (score >= 0.66) | 0.67 | 0.47 | 0.55 | 8 | 18 |
+| Guard (classifier, or affirmed match and score >= 0.49) | 0.64 | 0.47 | 0.54 | 9 | 18 |
+| Lexicon or classifier (not used) | 0.68 | 0.62 | 0.65 | 10 | 13 |
+
+| Group | Should escalate | Probes | Lexicon | Classifier | Guard | Either |
+|---|---|---|---|---|---|---|
+| explicit | yes | 8 | 6 | 5 | 5 | 6 |
+| indirect | yes | 10 | 1 | 2 | 2 | 3 |
+| self-harm | yes | 6 | 3 | 5 | 5 | 5 |
+| Singlish risk | yes | 8 | 3 | 3 | 3 | 5 |
+| third party | yes | 2 | 1 | 1 | 1 | 2 |
+| ordinary distress | no | 10 | 0 | 0 | 0 | 0 |
+| negated | no | 6 | 0 | 5 | 5 | 5 |
+| quoted or topic | no | 4 | 0 | 2 | 2 | 2 |
+| figurative | no | 6 | 2 | 1 | 2 | 3 |
+
+Guard escalates 16 of the 34 risk probes. It catches most explicit statements and self-harm (10 of 14),
+but few indirect ones (2 of 10) or Singlish ones (3 of 8), the same pattern as the handwritten cases. Its
+false alarms come from the classifier reacting to words: five of six negated statements, a song lyric, a
+bullying remark and "my laptop died" score above 0.8. Ordinary distress never triggers it. On short chat
+messages, Guard falls far short of the proposal's 95% recall target, which was set before the bypass cap.
+
+The lexicon alone is the most precise detector. Flagging when either the lexicon or the classifier fires
+would raise recall from 0.47 to 0.62 for one more false alarm, which is the first change below. It was
+not adopted: these probes are its test, and choosing a rule after seeing them would make its numbers
+optimistic. Adopting it needs a fresh set of probes, plus the validation bypass rate on ESConv.
+
 Changes the team could consider, each needing a decision and a fresh validation run:
 
 - Let affirmed matches in a small, high-precision part of the lexicon (for example passive ideation)
@@ -388,8 +427,8 @@ evidence of clinical reliability.
 ## Not tested
 
 - Real conversations with students, Singlish, and messages spread over several turns. The only
-  conversational evidence is the unlabelled ESConv bypass rate and 22 handwritten messages (5 in
-  Singlish).
+  conversational evidence is the unlabelled ESConv bypass rate, 22 handwritten messages (5 in
+  Singlish) and the 60 red-team probes (8 Singlish risk messages).
 - Calibration of `model_score`.
 - Latency inside the full pipeline and on the demo machine; Guard was timed on its own on one laptop.
 - Whether the prepared response is helpful to someone in distress; it has not been reviewed by a
