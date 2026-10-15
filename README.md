@@ -38,15 +38,9 @@ data/                    generated, not tracked by git (see below)
 checkpoints/             generated, not tracked by git
 ```
 
-### Branches
+### Platforms
 
-| Branch | Use |
-|---|---|
-| `main` | local runs |
-| `kaggle` | same notebook, paths set up for Kaggle (data from an attached Kaggle Dataset) |
-| `colab` | same notebook, paths set up for Google Colab (data and outputs on Google Drive) |
-
-The three notebooks differ only in the path-setup block of the first code cell and the instruction note under the title. Make shared changes on `main`, then merge `main` into the other two.
+`train_perceive.ipynb` runs locally, on Kaggle and on Google Colab from `main`. Its first code cell detects the platform and sets the data and output paths; the note under the title has the steps for each platform.
 
 ## Setup
 
@@ -56,7 +50,7 @@ source nlc_venv/bin/activate
 pip install -r requirements.txt
 ```
 
-On Kaggle and Colab, do not install the pinned requirements; those platforms ship their own torch and transformers. See the instruction note at the top of the notebook on each branch.
+On Kaggle and Colab, do not install the pinned requirements; those platforms ship their own torch and transformers. See the platform note at the top of the notebook.
 
 ## 1. Preprocessing
 
