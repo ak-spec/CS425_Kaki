@@ -13,8 +13,8 @@ Guard -> Perceive -> Plan -> Speak (x3 strategies) -> Critique -> reply
 | Guard | DistilRoBERTa classifier + safety lexicon | detect crisis messages, bypass generation, show human-help info |
 | **Perceive** | DistilRoBERTa | predict the seeker's emotion and problem type from the history |
 | Plan | RoBERTa-base | rank the 8 support strategies, keep the top 3 |
-| Speak | Qwen2.5-0.5B-Instruct + LoRA | write one reply per strategy (optional DPO stage) |
-| Critique | DeBERTa-v3-base cross-encoder | score each reply; final pick combines Critic score and planner probability |
+| Speak | Qwen2.5-0.5B-Instruct + LoRA | write one reply per strategy |
+| Critique | DeBERTa-v3-base cross-encoder | score each reply and pick one; the weight on planner probability was chosen on validation (0) |
 
 Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL 2021), 1,300 emotional-support dialogues with labelled strategies and seeker feedback.
 
@@ -30,8 +30,10 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Critique (`src/critic.py`, `src/train_critic.py`) | reply-contrast Critic and Eval-Critic trained; look-ahead weight chosen on validation (see `docs/critic.md`) |
 | Pipeline (`src/pipeline.py`) | all stages connected; the Critic chooses among the top three candidates |
 | Evaluation (`src/select_eval_contexts.py`, `src/generate_outputs.py`, `src/metrics.py`, `src/compare_configs.py`, `src/human_eval_sheet.py`) | test comparison done (see `docs/results.md`); human ratings pending |
-| Demo (`app.py`) | built and checked with stand-in models; real checkpoints pending (see `docs/demo.md`) |
-| Simulator | not started |
+| Baselines, controllability, simulator, speed (`src/baselines.py`, `src/controllability.py`, `src/simulate.py`, `src/benchmark.py`) | done (see `docs/results.md`) |
+| Guard red-team probes (`src/guard_probes.py`) | done (see `docs/guard.md`) |
+| Demo (`app.py`) | built and checked with stand-in models; laptop run with real checkpoints pending (see `docs/demo.md`) |
+| DPO | not done: the Critic's preferences are too weak to mine reliable pairs (see `docs/critic.md`) |
 
 Main comparison: `docs/results.md`. Per stage: Perceive in `docs/perceive.md`, Plan in `docs/plan.md`, Speak in `docs/speak.md`, Guard in `docs/guard.md`, Critique in `docs/critic.md`.
 
@@ -57,7 +59,13 @@ src/pipeline.py             Kaki: Guard -> Perceive -> Plan -> Speak -> Critique
 src/select_eval_contexts.py  human-evaluation contexts, chosen before any outputs
 src/generate_outputs.py     replies from each configuration on test histories
 src/metrics.py              BLEU, ROUGE-L, BERTScore, Distinct, strategy accuracy
-src/compare_configs.py      paired bootstrap intervals between configurations
+src/compare_configs.py      paired bootstrap intervals between systems, optional Eval-Critic scores
+src/baselines.py            BlenderBot-small and zero-shot Qwen baselines
+src/perplexity.py           test perplexity of the reference replies
+src/controllability.py      does Speak follow the requested strategy (independent tagger)
+src/simulate.py             simulated chats with a prompted seeker model
+src/benchmark.py            parameters, latency per turn and peak memory
+src/guard_probes.py         Guard on handwritten red-team probes
 src/human_eval_sheet.py     blinded rating sheet and agreement scoring
 app.py                      Streamlit demo (python -m streamlit run app.py)
 tests/                      unit tests (python -m unittest discover -s tests)

@@ -136,3 +136,12 @@ The two contrast Critics were evaluated once on test (764 ratings, 840 pairs, 23
 | Real reply above another dialogue's | 0.924 | 0.929 | 0.5 |
 
 Test agrees with validation: the Critics depend on the reply, and their link to seeker ratings stays weak.
+
+## Not done: DPO
+
+The proposal planned to align Speak with DPO on chosen/rejected pairs ranked by the Critic. It was not
+run. The pairs would encode what the Critic prefers, and the Critic's link to seeker ratings is weak
+(Spearman 0.11 on test); the Eval-Critic, trained the same way, rates zero-shot Qwen level with planning
+and look-ahead above the human replies (`docs/results.md`). Training the generator towards such a judge
+would most likely teach it the judge's quirks, and with no reliable judge left to evaluate the result,
+any gain could not be checked. Better feedback labels (one rating per reply) would be needed first.

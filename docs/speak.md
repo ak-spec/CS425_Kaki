@@ -101,5 +101,17 @@ reference strategy are given.
 In the full pipeline on a few handwritten messages, replies are short and
 fluent, and a look-ahead turn takes about 1.5 seconds on the GPU. Strategy
 control looks weak: a reply generated for one strategy often reads like
-another, and two strategies sometimes give the same reply. Measure this on
-test histories before relying on it. Test has not been evaluated.
+another, and two strategies sometimes give the same reply.
+
+## Test results
+
+Perplexity of the test reference replies (`src/perplexity.py`): history-only
+adapter 14.5, conditioned adapter with the reference emotion and strategy 14.2,
+and the base model without an adapter 35.1.
+
+Strategy control, measured with an independent tagger on 200 test histories
+(`src/controllability.py`, details in `docs/results.md`): 36% of replies are
+tagged with the requested strategy, against 57% for the human replies of the
+same histories and well above replies written without a strategy for every
+strategy. Control is strongest for Question, Providing Suggestions and
+Self-disclosure and weakest for Information and Restatement.

@@ -361,6 +361,17 @@ would raise recall from 0.47 to 0.62 for one more false alarm, which is the firs
 not adopted: these probes are its test, and choosing a rule after seeing them would make its numbers
 optimistic. Adopting it needs a fresh set of probes, plus the validation bypass rate on ESConv.
 
+### In simulated conversations
+
+In the 200 simulated chats per configuration (`docs/results.md`), Guard ended 8-11% of them. Twelve of
+the 200 opening messages were flagged in every configuration, with scores from 0.68 to 0.99 and no
+lexicon match, and they read as ordinary distress: grief over a pet, arguments with a partner, feeling
+down, an accidental fall. Among the ten handwritten benchmark queries, it flagged "I feel like I'm
+drowning" about coursework. The simulated seekers (Qwen2.5-7B-Instruct) write longer, more emotional
+messages than ESConv's seekers, and on that register the 2% cap chosen on ESConv does not hold. A rate
+measured on more expressive chat messages, or thresholds chosen on them, would be needed before Kaki
+meets real students.
+
 Changes the team could consider, each needing a decision and a fresh validation run:
 
 - Let affirmed matches in a small, high-precision part of the lexicon (for example passive ideation)
