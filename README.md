@@ -10,7 +10,7 @@ Guard -> Perceive -> Plan -> Speak (x3 strategies) -> Critique -> reply
 
 | Stage | Model | Job |
 |---|---|---|
-| Guard | classifier + safety lexicon | detect crisis messages, bypass generation, show human-help info |
+| Guard | DistilRoBERTa classifier + safety lexicon | detect crisis messages, bypass generation, show human-help info |
 | **Perceive** | DistilRoBERTa | predict the seeker's emotion and problem type from the history |
 | Plan | RoBERTa-base | rank the 8 support strategies, keep the top 3 |
 | Speak | Qwen2.5-0.5B-Instruct + LoRA | write one reply per strategy (optional DPO stage) |
@@ -24,15 +24,22 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 |---|---|
 | Data preprocessing (`src/prep.py`) | done |
 | Perceive training notebook | written and smoke-tested; full training run pending |
-| Guard, Plan, Speak, Critique, simulator, demo | not started |
+| Guard (`src/guard.py`, see `docs/guard.md`) | trained and evaluated |
+| Plan, Speak, Critique, simulator, demo | not started |
 
-No results are reported yet.
+Guard's results are in `docs/guard.md`; no other results are reported yet.
 
 ## Repository layout
 
 ```
 src/prep.py              ESConv download, cleaning, label collapsing, split, sample building
 train_perceive.ipynb     Perceive (emotion + problem classifier) training and evaluation
+src/prep_guard.py        Guard data: C-SSRS Reddit labels, checksums, dedup, split by user
+src/train_guard.py       Guard training, threshold selection and evaluation
+src/guard.py             Guard inference: classifier, lexicon, prepared response
+configs/guard.json       Guard settings and crisis response with checked contacts
+tests/test_guard.py      Guard tests (python -m unittest discover -s tests)
+docs/guard.md            Guard data, method, results and known limits
 requirements.txt         pinned local dependencies
 data/                    generated, not tracked by git (see below)
 checkpoints/             generated, not tracked by git
