@@ -122,3 +122,17 @@ demo, put the contrast Critic in `checkpoints/critic`; `Kaki.load` then uses it 
   Likely more faithful to the labels, but it does not address the position effect.
 
 Any further change should be compared on validation with the same checks before the test split is used.
+
+## Test results
+
+The two contrast Critics were evaluated once on test (764 ratings, 840 pairs, 236 against the trend).
+
+| Test | Critic, contrast | Eval-Critic, contrast | Baseline |
+|---|---|---|---|
+| Mean absolute error | 0.728 | 0.734 | 0.744 (constant) |
+| Spearman with rating | 0.11 | 0.18 | |
+| Pairwise accuracy | 0.604 | 0.668 | 0.719 (position) |
+| Pairs against the trend | 0.263 | 0.263 | 0 |
+| Real reply above another dialogue's | 0.924 | 0.929 | 0.5 |
+
+Test agrees with validation: the Critics depend on the reply, and their link to seeker ratings stays weak.

@@ -136,4 +136,7 @@ single-seed runs, and differences of this size are within run-to-run variation.
 
 For look-ahead this means the three candidates are mostly drawn from Others,
 Providing Suggestions, Question and Restatement or Paraphrasing. The reference
-strategy is among the top three 64% of the time. Test has not been evaluated.
+strategy is among the top three 64% of the time.
+
+The default checkpoint was then evaluated once on test (1,770 examples): accuracy
+0.321, macro-F1 0.202, top-three coverage 0.651, in line with validation.
