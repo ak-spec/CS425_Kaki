@@ -87,17 +87,19 @@ class Speaker:
         """checkpoint=None loads the base model without an adapter: the zero-shot baseline, prompted
         like the history-only adapter."""
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Qwen's weights are stored in bf16, which most CPUs only emulate; fp32 is faster there
+        dtype = torch.float32 if self.device == "cpu" else "auto"
         if checkpoint is None:
             self.config = dict(ZERO_SHOT)
             self.tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-            self.model = AutoModelForCausalLM.from_pretrained(BASE_MODEL).to(self.device).eval()
+            self.model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, dtype=dtype).to(self.device).eval()
             return
         checkpoint = Path(checkpoint)
         self.config = json.loads(
             (checkpoint / "speak_config.json").read_text(encoding="utf-8")
         )
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-        base = AutoModelForCausalLM.from_pretrained(self.config["base_model"])
+        base = AutoModelForCausalLM.from_pretrained(self.config["base_model"], dtype=dtype)
         self.model = PeftModel.from_pretrained(base, checkpoint).to(self.device).eval()
 
     @torch.inference_mode()
