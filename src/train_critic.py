@@ -10,6 +10,9 @@ sees validation or test dialogues.
     python src/train_critic.py --half b --output checkpoints/eval-critic
     python src/train_critic.py --half a --output checkpoints/critic --evaluate-test   # once, at the end
 
+--contrast-weight adds a margin loss that ranks each real reply above a reply from another dialogue for
+the same history, so the score has to depend on the reply (see docs/critic.md).
+
 The epoch with the best validation pairwise accuracy is kept. Validation also reports baselines (constant
 rating, position in the dialogue, reply length) and two checks that the score depends on the reply:
 accuracy on rating pairs that go against the conversation's upward trend, and how often the real reply
@@ -32,6 +35,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_
 from critic import predict_ratings, to_target
 
 SMOKE = {"train": 64, "val": 64, "max_len": 128}
+CONTRAST_MARGIN = 0.5  # in target units: one rating point
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -116,6 +120,9 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--max-length", type=int, default=512)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--contrast-weight", type=float, default=0.0,
+                    help="weight of a margin loss that ranks the real reply above one from another dialogue "
+                         "for the same history; 0 trains on ratings only")
     ap.add_argument("--smoke", action="store_true", help="64 rows, 1 epoch, 128 tokens; never reads test")
     ap.add_argument("--evaluate-test", action="store_true", help="score the test split once with a trained checkpoint")
     args = ap.parse_args()
@@ -165,15 +172,25 @@ def main():
         model.train()
         order = list(range(len(train)))
         random.shuffle(order)
+        others = other_replies(train, args.seed + epoch) if args.contrast_weight else None
         running = 0.0
         for start in range(0, len(order), args.batch_size):
-            batch = [train[i] for i in order[start: start + args.batch_size]]
+            idx = order[start: start + args.batch_size]
+            batch = [train[i] for i in idx]
             enc = tok([r["text"] for r in batch], [r["response"] for r in batch], truncation="only_first",
                       max_length=args.max_length, padding=True, return_tensors="pt").to(device)
             target = torch.tensor([to_target(r["feedback"]) for r in batch], device=device)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
                 out = model(**enc).logits.squeeze(-1)
             loss = nn.functional.mse_loss(out.float(), target)
+            if args.contrast_weight:
+                # the real reply should outscore a reply from another dialogue for the same history
+                enc_other = tok([r["text"] for r in batch], [others[i] for i in idx], truncation="only_first",
+                                max_length=args.max_length, padding=True, return_tensors="pt").to(device)
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
+                    out_other = model(**enc_other).logits.squeeze(-1)
+                margin = nn.functional.relu(CONTRAST_MARGIN - (out.float() - out_other.float())).mean()
+                loss = loss + args.contrast_weight * margin
             if not torch.isfinite(loss):
                 raise RuntimeError("non-finite training loss")
             opt.zero_grad(set_to_none=True)
