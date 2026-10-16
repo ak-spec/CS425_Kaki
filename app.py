@@ -8,6 +8,7 @@ From the repository root:
 The conversation is kept in st.session_state only. Messages are never written to disk or logged.
 """
 import argparse
+import gc
 import json
 import os
 import re
@@ -272,7 +273,13 @@ def main():
                      + ", ".join(str(p) for p in missing)
                      + ". Run with --fake to try the interface without models (docs/demo.md).")
             st.stop()
-        kaki = load_kaki(str(args.checkpoints), model_set(config))
+        wanted = model_set(config)
+        if state.get("loaded") not in (None, wanted):
+            # free the other model set first, so a laptop never holds two copies of the Speak base model
+            load_kaki.clear()
+            gc.collect()
+        state.loaded = wanted
+        kaki = load_kaki(str(args.checkpoints), wanted)
 
     prompt = st.chat_input("Message Kaki")
     chat, panel = st.columns(2, gap="large")
