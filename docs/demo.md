@@ -84,3 +84,13 @@ few seconds per reply for direct and planning and about three times that for loo
 three replies one after another (up to about 35 s if all three reach the cap). Expect about 3 GB of RAM
 with the encoders loaded. The response time shown in the chat is the figure to report for the trained
 checkpoints.
+
+## Checked with the real models
+
+On 16 October 2026 the page ran headlessly (Streamlit's `AppTest`) with the trained checkpoints on four CPU
+threads, as on a laptop: an ordinary message and a Singlish one in look-ahead (7 and 9 seconds per reply,
+the Critic scoring three candidates), one each in planning (3 seconds) and direct (3 seconds), and a risk
+message, which Guard handed over without generating. Peak memory was 5.2 GB across all three
+configurations: switching between direct and the other two frees the loaded models first and reloads in
+about 20 seconds, so stay on planning and look-ahead during a demo if memory is tight. The first run
+downloads Qwen2.5-0.5B-Instruct and distilroberta-base (about 1.5 GB).
