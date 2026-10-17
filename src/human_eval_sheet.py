@@ -63,8 +63,9 @@ def build(contexts: list[dict], outputs: dict[str, dict], seed: int = 42) -> tup
     return sheet, key
 
 
-def read_sheet(path: Path) -> dict[tuple[int, str], dict]:
-    """{(context, label): {criterion: rating}} from a filled sheet; every rating must be a whole number 1-5."""
+def read_sheet(path: Path, allow_missing: bool = False) -> dict[tuple[int, str], dict]:
+    """{(context, label): {criterion: rating}} from a filled sheet; every rating must be a whole number 1-5.
+    With allow_missing, a blank cell is left out (and reported by score) instead of stopping."""
     with open(path, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f))
     ratings, problems = {}, []
@@ -75,6 +76,8 @@ def read_sheet(path: Path) -> dict[tuple[int, str], dict]:
         ratings[unit] = {}
         for c in CRITERIA:
             value = (r.get(c) or "").strip()
+            if allow_missing and not value:
+                continue
             try:
                 number = float(value)
             except ValueError:
@@ -129,18 +132,23 @@ def score(sheets: list[dict], key: dict, gap: int = 2) -> dict:
     configs = sorted({config for group in configs_of.values() for config in group})
 
     def means(raters):
-        return {config: {c: mean(s[u][c] for s in raters for u in units if config in configs_of[u])
+        return {config: {c: mean(s[u][c] for s in raters for u in units if config in configs_of[u] and c in s[u])
                          for c in CRITERIA} for config in configs}
+
+    def given(u, c):  # the ratings present for one reply and criterion; missing cells are left out
+        return [s[u][c] for s in sheets if c in s[u]]
 
     return {
         "raters": len(sheets), "units": len(units),
+        "missing": [{"rater": i, "context": u[0], "label": u[1], "criterion": c}
+                    for i, s in enumerate(sheets, 1) for u in units for c in CRITERIA if c not in s[u]],
         "means": means(sheets),
         "means_per_rater": [means([s]) for s in sheets],
-        "alpha_ordinal": {c: krippendorff_alpha([[s[u][c] for s in sheets] for u in units]) for c in CRITERIA},
+        "alpha_ordinal": {c: krippendorff_alpha([given(u, c) for u in units]) for c in CRITERIA},
         "disagreements": [{"context": u[0], "label": u[1], "configs": configs_of[u], "criterion": c,
-                           "ratings": [s[u][c] for s in sheets]}
+                           "ratings": given(u, c)}
                           for u in units for c in CRITERIA
-                          if max(s[u][c] for s in sheets) - min(s[u][c] for s in sheets) >= gap],
+                          if len(given(u, c)) > 1 and max(given(u, c)) - min(given(u, c)) >= gap],
     }
 
 
@@ -180,17 +188,62 @@ def main_build(args):
                       "key": str(folder / "key.json"), "contexts_with_a_shared_reply": same}))
 
 
+def spearman(x: list, y: list) -> float:
+    """Spearman's rank correlation, ties given their average rank."""
+    def ranks(v):
+        order = sorted(range(len(v)), key=v.__getitem__)
+        r, i = [0.0] * len(v), 0
+        while i < len(v):
+            j = i
+            while j + 1 < len(v) and v[order[j + 1]] == v[order[i]]:
+                j += 1
+            for k in range(i, j + 1):
+                r[order[k]] = (i + j) / 2
+            i = j + 1
+        return r
+    rx, ry = ranks(x), ranks(y)
+    mx, my = mean(rx), mean(ry)
+    cov = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    sx, sy = sum((a - mx) ** 2 for a in rx) ** 0.5, sum((b - my) ** 2 for b in ry) ** 0.5
+    return cov / (sx * sy) if sx and sy else float("nan")
+
+
+def judge_agreement(sheets: list[dict], key: dict, judge_rows: list[dict]) -> dict:
+    """Per criterion: Spearman of the judge model's rating with the raters' mean rating, and of the first two
+    raters with each other, over the replies the judge also rated (the test contexts, not the Singlish ones)."""
+    judged = {(r["dialogue_id"], r["utterance_idx"]): r["scores"] for r in judge_rows if r["subset"] == "human_eval"}
+    units = [(c["context"], label, group[0], (c["dialogue_id"], c["utterance_idx"]))
+             for c in key["contexts"] for label, group in c["labels"].items()]
+    units = [u for u in units if u[3] in judged and judged[u[3]][u[2]]]
+    out = {}
+    for c in CRITERIA:
+        rows = [(judged[k][system][c], [s[(ctx, label)][c] for s in sheets if c in s[(ctx, label)]])
+                for ctx, label, system, k in units]
+        rows = [(j, h) for j, h in rows if len(h) == len(sheets)]
+        out[c] = {"replies": len(rows),
+                  "judge_vs_raters": round(spearman([j for j, _ in rows], [mean(h) for _, h in rows]), 3),
+                  "rater1_vs_rater2": round(spearman([h[0] for _, h in rows], [h[1] for _, h in rows]), 3)}
+    return out
+
+
 def main_score(args):
     if len(args.sheets) < 2:
         raise SystemExit("agreement needs at least two raters' sheets")
     key = json.loads(args.key.read_text(encoding="utf-8"))
-    report = score([read_sheet(p) for p in args.sheets], key, args.gap)
+    sheets = [read_sheet(p, args.allow_missing) for p in args.sheets]
+    report = score(sheets, key, args.gap)
+    if args.judge:
+        report["judge_agreement"] = judge_agreement(sheets, key, read_jsonl(args.judge))
     report["sheets"] = [str(p) for p in args.sheets]
     args.output.write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(f"{'':<12}" + "".join(f"{c:>17}" for c in CRITERIA))
     for config, row in report["means"].items():
         print(f"{config:<12}" + "".join(f"{row[c]:>17.2f}" for c in CRITERIA))
     print(f"{'alpha (ord.)':<12}" + "".join(f"{report['alpha_ordinal'][c]:>17.3f}" for c in CRITERIA))
+    if report["missing"]:
+        print(f"missing ratings, left out: {report['missing']}")
+    for c, a in report.get("judge_agreement", {}).items():
+        print(f"{c}: judge vs raters {a['judge_vs_raters']}, rater 1 vs rater 2 {a['rater1_vs_rater2']} ({a['replies']} replies)")
     print(f"\n{len(report['disagreements'])} ratings differ by {args.gap} or more points:")
     for d in report["disagreements"]:
         print(f"  context {d['context']} reply {d['label']} ({', '.join(d['configs'])}), {d['criterion']}: {d['ratings']}")
@@ -215,6 +268,8 @@ def main():
     s.add_argument("--key", type=Path, default=ROOT / "data/human_eval/key.json")
     s.add_argument("--gap", type=int, default=2, help="report ratings whose range is at least this")
     s.add_argument("--output", type=Path, default=ROOT / "data/human_eval/results.json")
+    s.add_argument("--allow-missing", action="store_true", help="leave blank cells out instead of stopping")
+    s.add_argument("--judge", type=Path, help="judge_rows.jsonl from src/judge.py, to compare with the raters")
     args = ap.parse_args()
     if args.command == "build":
         main_build(args)

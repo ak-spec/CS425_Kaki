@@ -18,7 +18,9 @@ from test_eval import fake_kaki, sheet_inputs, TWO_SEEKER
 import json
 import tempfile
 from ablations import inputs as ablation_inputs
-from human_eval_sheet import CRITERIA, build as build_sheet, query_outputs, query_rows
+import csv
+from human_eval_sheet import (CRITERIA, FIELDS, build as build_sheet, judge_agreement, query_outputs, query_rows,
+                              read_sheet, score as score_sheet, spearman)
 from judge import parse_scores, pick_contexts, prompt
 from realism_sheet import build as build_realism, read_guesses, real_openers, score as score_realism
 
@@ -212,6 +214,48 @@ class RealismTests(unittest.TestCase):
             path.write_text("item,message,guess\n1,x,Real\n2,y,maybe\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 read_guesses(path)
+            path.write_text("item,message,guess\n1,x,Human\n2,y,AI\n3,z,HUMAN\n", encoding="utf-8")
+            self.assertEqual(read_guesses(path), {"1": "real", "2": "simulated", "3": "real"})
+
+
+class ScoringTests(unittest.TestCase):
+    def test_missing_cells_are_left_out_only_when_allowed(self):
+        contexts, outputs = sheet_inputs()
+        sheet, key = build_sheet(contexts, outputs)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "rater.csv"
+            with open(path, "w", encoding="utf-8-sig", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=FIELDS)
+                writer.writeheader()
+                rows = [dict(r, relevance=4, acknowledgement=3, helpfulness=3, fluency=5, safety=4) for r in sheet]
+                rows[0]["safety"] = ""
+                writer.writerows(rows)
+            with self.assertRaises(ValueError):
+                read_sheet(path)
+            ratings = read_sheet(path, allow_missing=True)
+        self.assertNotIn("safety", ratings[1, "A"])
+        report = score_sheet([ratings, read_sheet_full(sheet)], key)
+        self.assertEqual(report["missing"], [{"rater": 1, "context": 1, "label": "A", "criterion": "safety"}])
+        self.assertTrue(all(row["safety"] for row in report["means"].values()))
+
+    def test_spearman_and_judge_agreement(self):
+        self.assertAlmostEqual(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1.0)
+        self.assertAlmostEqual(spearman([1, 2, 3, 4], [4, 3, 2, 1]), -1.0)
+        self.assertAlmostEqual(spearman([1, 1, 2], [1, 1, 2]), 1.0)
+        contexts, outputs = sheet_inputs()
+        sheet, key = build_sheet(contexts, outputs)
+        level = {"direct": 2, "planning": 4, "lookahead": 5}
+        system_of = {(c["context"], label): group[0] for c in key["contexts"] for label, group in c["labels"].items()}
+        rater = {u: dict.fromkeys(CRITERIA, level[s]) for u, s in system_of.items()}
+        judge_rows = [{"subset": "human_eval", "dialogue_id": c["dialogue_id"], "utterance_idx": c["utterance_idx"],
+                       "scores": {s: dict.fromkeys(CRITERIA, level[s]) for s in level}} for c in key["contexts"]]
+        result = judge_agreement([rater, rater], key, judge_rows)
+        self.assertEqual(result["relevance"]["replies"], 6)
+        self.assertEqual(result["relevance"]["judge_vs_raters"], 1.0)
+
+
+def read_sheet_full(sheet):
+    return {(r["context"], r["label"]): dict.fromkeys(CRITERIA, 3) for r in sheet}
 
 
 if __name__ == "__main__":

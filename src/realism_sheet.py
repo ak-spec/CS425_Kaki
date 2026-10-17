@@ -41,10 +41,15 @@ def build(real: list[str], simulated: list[str], n: int = 10, seed: int = 42) ->
     return sheet, {"seed": seed, "answers": {str(i): a for i, (_, a) in enumerate(items, 1)}}
 
 
+SYNONYMS = {"real": "real", "human": "real", "simulated": "simulated", "ai": "simulated"}
+
+
 def read_guesses(path: Path) -> dict[str, str]:
+    """{item: "real" or "simulated"}; "human" and "ai" are accepted too, in any case."""
     with open(path, encoding="utf-8-sig", newline="") as f:
         rows = [r for r in csv.DictReader(f) if (r.get("item") or "").strip()]
-    guesses = {r["item"].strip(): (r.get("guess") or "").strip().lower() for r in rows}
+    guesses = {r["item"].strip(): SYNONYMS.get((r.get("guess") or "").strip().lower(), "")
+               for r in rows}
     bad = [i for i, g in guesses.items() if g not in ("real", "simulated")]
     if bad:
         raise ValueError(f"{path}: guess must be 'real' or 'simulated' for items {bad}")
