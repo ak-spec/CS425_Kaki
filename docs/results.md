@@ -266,7 +266,7 @@ On the test contexts the mean of five is direct 3.54, BlenderBot-small 3.20, loo
 2.88; Guard flagged "My CCA leader always scold me in front of everyone... Thinking of quitting but scared
 people say I give up." in every Kaki configuration, and both raters gave the prepared crisis reply 1 for
 relevance there. Where Guard was right (a seeker crying every day and asking how to keep from harming
-themselves), the same reply was rated 4-5 on every criterion.
+themselves), the same reply got 4 or 5 in nine of its ten ratings.
 
 The judge model's ratings correlate with the raters' mean about as well as the raters correlate with each
 other (Spearman, 60 replies on the test contexts): relevance 0.50 against 0.50, helpfulness 0.28 against
