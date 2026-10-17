@@ -8,7 +8,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from pipeline import Kaki, render
+from common import render
+from pipeline import Kaki
 
 STRATEGIES = [
     {"strategy": "Question", "probability": 0.5},

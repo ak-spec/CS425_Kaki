@@ -22,10 +22,9 @@ import re
 from pathlib import Path
 from statistics import mean
 
+from common import private_dir, read_jsonl
 from compare_configs import bootstrap_diff
-from generate_outputs import private_dir
 from human_eval_sheet import CRITERIA, show_history
-from select_eval_contexts import read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 SYSTEMS = ("direct", "planning", "lookahead", "blenderbot", "zeroshot")
@@ -102,7 +101,7 @@ def main():
         for k in keys:
             for reply in {rows[s][k]["reply"] for s in SYSTEMS} | {rows[SYSTEMS[0]][k]["reference"]}:
                 jobs[(k, reply)] = prompt(text[k], reply)
-    from simulate import Seeker as ChatModel  # the same batched chat wrapper the simulator uses
+    from chat_model import ChatModel
 
     model = ChatModel(args.judge, batch_size=args.batch_size)
     order = list(jobs)

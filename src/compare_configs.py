@@ -23,8 +23,8 @@ from pathlib import Path
 import numpy as np
 from rouge_score import rouge_scorer
 
+from common import read_jsonl
 from metrics import SYSTEMS, bert_scorer
-from select_eval_contexts import read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 

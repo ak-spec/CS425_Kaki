@@ -17,28 +17,12 @@ import collections
 import hashlib
 import json
 import random
-import re
 from pathlib import Path
+
+from common import history_turns, read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIORITY = ("academic pressure", "problems with friends")
-TAG = re.compile(r" \| (?=(?:seeker|supporter): )")
-
-
-def read_jsonl(path: Path) -> list[dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f]
-
-
-def history_turns(text: str) -> list[dict]:
-    """'speaker: text | speaker: text' back into {"speaker", "text"} turns."""
-    turns = []
-    for part in TAG.split(text.strip()):
-        speaker, sep, said = part.partition(": ")
-        if speaker not in ("seeker", "supporter") or not sep or not said.strip():
-            raise ValueError(f"not a tagged history turn: {part[:40]!r}")
-        turns.append({"speaker": speaker, "text": said})
-    return turns
 
 
 def eligible(row: dict, min_seeker_turns: int = 2, min_seeker_words: int = 20, max_words: int = 250) -> bool:

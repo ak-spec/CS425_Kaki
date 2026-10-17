@@ -14,13 +14,14 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from common import history_turns, read_jsonl
 from compare_configs import bootstrap_diff, paired_rows
 from generate_outputs import generate, load_rows, row_turns
 from human_eval_sheet import CRITERIA, FIELDS, build, krippendorff_alpha, read_sheet, score
 from metrics import distinct, evaluate, latex, load_outputs, score_rows, words
 from pipeline import CONFIGS, Kaki
 from prep_downstream import history
-from select_eval_contexts import eligible, history_turns, read_jsonl, select
+from select_eval_contexts import eligible, select
 
 
 def write_jsonl(path, rows):

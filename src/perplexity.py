@@ -19,8 +19,7 @@ from pathlib import Path
 
 from torch.utils.data import DataLoader
 
-from generate_outputs import private_dir
-from select_eval_contexts import read_jsonl
+from common import private_dir, read_jsonl
 from speak import Speaker, collate_examples, training_example
 from train_speak import validation_loss
 

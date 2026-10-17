@@ -23,13 +23,10 @@ import argparse
 import json
 from pathlib import Path
 
+from common import render  # the history format Perceive, Plan and Speak were trained on
+
 ROOT = Path(__file__).resolve().parent.parent
 CONFIGS = ("direct", "planning", "lookahead")
-
-
-def render(turns: list[dict]) -> str:
-    """History in the format Perceive, Plan and Speak were trained on: 'speaker: text | ...'."""
-    return " | ".join(f"{t['speaker']}: {' '.join(t['text'].split())}" for t in turns if t["text"].strip())
 
 
 class Kaki:

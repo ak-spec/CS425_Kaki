@@ -19,10 +19,9 @@ from collections import Counter
 from pathlib import Path
 from statistics import mean
 
+from common import private_dir, read_jsonl
 from compare_configs import bootstrap_diff
-from generate_outputs import private_dir
 from metrics import bert_scorer, bleu, distinct, words
-from select_eval_contexts import read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 VARIANTS = ("planning", "oracle_strategy", "oracle_emotion", "constant_emotion")

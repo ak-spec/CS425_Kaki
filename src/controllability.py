@@ -27,8 +27,7 @@ from statistics import mean
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from generate_outputs import private_dir
-from select_eval_contexts import read_jsonl
+from common import private_dir, read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 

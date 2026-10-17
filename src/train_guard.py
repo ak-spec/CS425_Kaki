@@ -27,14 +27,10 @@ import transformers
 from sklearn.metrics import average_precision_score, roc_auc_score
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
 
+from common import read_jsonl
 from guard import CONFIG, LABELS, ROOT, Guard, decide, guard_text, match_lexicon, risk_scores
 
 SMOKE = {"train": 64, "val": 64, "esconv": 200, "max_len": 128}
-
-
-def read_jsonl(path: Path) -> list[dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f]
 
 
 def set_seed(seed: int):

@@ -33,10 +33,11 @@ from statistics import mean
 
 import torch
 
+from chat_model import ChatModel
+from common import private_dir, render
 from compare_configs import bootstrap_diff
-from generate_outputs import private_dir
 from metrics import distinct, words
-from pipeline import CONFIGS, Kaki, render
+from pipeline import CONFIGS, Kaki
 
 ROOT = Path(__file__).resolve().parent.parent
 SEEKER_MODEL = "Qwen/Qwen2.5-7B-Instruct"
@@ -108,46 +109,6 @@ def repeats(replies: list[str], share: float = 0.5) -> list[bool]:
         out.append(bool(grams) and len(grams & seen) >= share * len(grams))
         seen |= grams
     return out
-
-
-class Seeker:
-    def __init__(self, name=SEEKER_MODEL, device=None, batch_size=8, temperature=0.7, top_p=0.9, max_new_tokens=80):
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="left")
-        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
-        self.model = AutoModelForCausalLM.from_pretrained(name, dtype=dtype).to(self.device).eval()
-        self.batch_size, self.temperature, self.top_p, self.max_new_tokens = (
-            batch_size,
-            temperature,
-            top_p,
-            max_new_tokens,
-        )
-
-    @torch.inference_mode()
-    def __call__(self, chats: list[list[dict]], seed: int, sample: bool = True, max_new_tokens=None) -> list[str]:
-        out = []
-        for start in range(0, len(chats), self.batch_size):
-            texts = [
-                self.tokenizer.apply_chat_template(c, tokenize=False, add_generation_prompt=True)
-                for c in chats[start : start + self.batch_size]
-            ]
-            enc = self.tokenizer(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(self.device)
-            torch.manual_seed(seed + start)
-            settings = (
-                {"do_sample": True, "temperature": self.temperature, "top_p": self.top_p}
-                if sample
-                else {"do_sample": False, "temperature": None, "top_p": None, "top_k": None}
-            )
-            gen = self.model.generate(
-                **enc,
-                **settings,
-                max_new_tokens=max_new_tokens or self.max_new_tokens,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
-            out += [self.tokenizer.decode(g[enc.input_ids.shape[1] :], skip_special_tokens=True).strip() for g in gen]
-        return out
 
 
 def converse(kaki, seeker, sessions: list[dict], openers: list[str], config: str, max_turns: int, seed: int):
@@ -255,7 +216,7 @@ def main():
     raw = json.loads(args.raw.read_text(encoding="utf-8"))
     sessions = situations(raw, json.loads(args.splits.read_text(encoding="utf-8")), args.sessions, args.seed)
     t0 = time.time()
-    seeker = Seeker(args.seeker, batch_size=args.batch_size)
+    seeker = ChatModel(args.seeker, batch_size=args.batch_size)
     openers = seeker([seeker_messages(s, []) for s in sessions], seed=args.seed)
     critic = None
     if args.critic:

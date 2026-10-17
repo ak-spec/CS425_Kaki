@@ -27,8 +27,8 @@ from pathlib import Path
 from statistics import mean
 
 from baselines import SYSTEMS as BASELINES
+from common import read_jsonl
 from pipeline import CONFIGS
-from select_eval_contexts import read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 WORD = re.compile(r"[\w']+")

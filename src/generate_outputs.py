@@ -20,17 +20,10 @@ import json
 import time
 from pathlib import Path
 
-from pipeline import CONFIGS, Kaki, render
-from select_eval_contexts import history_turns, read_jsonl
+from common import history_turns, private_dir, read_jsonl, render
+from pipeline import CONFIGS, Kaki
 
 ROOT = Path(__file__).resolve().parent.parent
-
-
-def private_dir(path: Path) -> Path:
-    """Create a directory whose contents git ignores: replies and rating sheets quote ESConv text."""
-    path.mkdir(parents=True, exist_ok=True)
-    (path / ".gitignore").write_text("*\n", encoding="utf-8")
-    return path
 
 
 def load_rows(path: Path, contexts: Path | None = None, limit: int | None = None) -> list[dict]:

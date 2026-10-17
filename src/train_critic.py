@@ -33,15 +33,11 @@ import transformers
 from scipy.stats import spearmanr
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
 
+from common import read_jsonl
 from critic import predict_ratings, to_target
 
 SMOKE = {"train": 64, "val": 64, "max_len": 128}
 CONTRAST_MARGIN = 0.5  # in target units: one rating point
-
-
-def read_jsonl(path: Path) -> list[dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f]
 
 
 def split_halves(dialogue_ids, seed: int) -> dict[str, list[int]]:

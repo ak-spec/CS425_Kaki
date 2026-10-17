@@ -21,7 +21,7 @@ from statistics import median
 
 import torch
 
-from generate_outputs import private_dir
+from common import private_dir
 
 ROOT = Path(__file__).resolve().parent.parent
 SYSTEMS = ("direct", "planning", "lookahead", "zeroshot", "blenderbot")

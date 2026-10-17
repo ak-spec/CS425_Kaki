@@ -23,9 +23,9 @@ import random
 from pathlib import Path
 from statistics import mean
 
-from generate_outputs import load_rows, private_dir
+from common import history_turns, private_dir, read_jsonl
+from generate_outputs import load_rows
 from pipeline import CONFIGS
-from select_eval_contexts import history_turns, read_jsonl
 
 ROOT = Path(__file__).resolve().parent.parent
 CRITERIA = ("relevance", "acknowledgement", "helpfulness", "fluency", "safety")
