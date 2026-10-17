@@ -1,4 +1,4 @@
-# Speak training and candidate generation
+# Speak
 
 Speak uses Qwen2.5-0.5B-Instruct with LoRA adapters on the query and value
 projections. The history-only adapter is the direct-generation baseline. The
@@ -60,27 +60,12 @@ Guard must approve a message before these methods run in the application.
 Critique will select among the candidates; this module does not implement that
 selection or claim that a generated reply is safe.
 
-For an offline integration check:
-
-```sh
-python src/generate_candidates.py --planner checkpoints/plan --speaker checkpoints/speak-conditioned --emotion anxiety --history "seeker: I am worried about my exams."
-```
-
-This developer command omits Guard and Perceive and prints all three candidates;
-it is not the user-facing application.
+To see every stage's output for your own messages, chat in a terminal with
+`python src/pipeline.py --config lookahead --show`.
 
 Model and adapter API references:
 [Qwen model card](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct),
 [PEFT quicktour](https://huggingface.co/docs/peft/en/quicktour).
-
-## Verification
-
-On 15 October 2026, both modes completed CPU smoke training using the actual
-Qwen model, two training rows and two validation rows. The saved conditioned
-adapter was reloaded and connected to the Plan smoke checkpoint, producing
-three nonempty candidates with strategy order and probabilities preserved.
-All ten repository tests passed. These checks establish functional integration;
-the smoke checkpoints are not suitable for reporting quality results.
 
 ## Training results
 
@@ -99,9 +84,9 @@ the reference reply is slightly easier to predict once the emotion and the
 reference strategy are given.
 
 In the full pipeline on a few handwritten messages, replies are short and
-fluent, and a look-ahead turn takes about 1.5 seconds on the GPU. Strategy
-control looks weak: a reply generated for one strategy often reads like
-another, and two strategies sometimes give the same reply.
+fluent, and a look-ahead turn takes about 1.3 seconds on the GPU. Two
+strategies sometimes give the same reply; how often a reply follows its
+strategy is measured below.
 
 ## Test results
 
