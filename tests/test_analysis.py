@@ -20,7 +20,7 @@ import tempfile
 from ablations import inputs as ablation_inputs
 import csv
 from human_eval_sheet import (CRITERIA, FIELDS, build as build_sheet, judge_agreement, query_outputs, query_rows,
-                              read_sheet, score as score_sheet, spearman)
+                              paired_differences, read_sheet, score as score_sheet, spearman)
 from judge import parse_scores, pick_contexts, prompt
 from realism_sheet import build as build_realism, read_guesses, real_openers, score as score_realism
 
@@ -252,6 +252,16 @@ class ScoringTests(unittest.TestCase):
         result = judge_agreement([rater, rater], key, judge_rows)
         self.assertEqual(result["relevance"]["replies"], 6)
         self.assertEqual(result["relevance"]["judge_vs_raters"], 1.0)
+
+    def test_paired_differences_between_systems(self):
+        contexts, outputs = sheet_inputs()
+        sheet, key = build_sheet(contexts, outputs)
+        level = {"direct": 2, "planning": 4, "lookahead": 5}
+        system_of = {(c["context"], label): group[0] for c in key["contexts"] for label, group in c["labels"].items()}
+        rater = {u: dict.fromkeys(CRITERIA, level[s]) for u, s in system_of.items()}
+        result = paired_differences([rater, rater], key)
+        self.assertEqual(result["differences"]["direct - planning"]["overall"], {"mean": -2, "ci95": [-2, -2]})
+        self.assertEqual(result["overall_by_subset"]["test"]["lookahead"], 5)
 
 
 def read_sheet_full(sheet):

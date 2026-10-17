@@ -226,12 +226,50 @@ def judge_agreement(sheets: list[dict], key: dict, judge_rows: list[dict]) -> di
     return out
 
 
+def per_context(sheets: list[dict], key: dict) -> dict:
+    """{criterion or "overall": {system: {context: mean rating over raters}}}; "overall" averages the criteria."""
+    out = {c: {} for c in (*CRITERIA, "overall")}
+    for ctx in key["contexts"]:
+        for label, group in ctx["labels"].items():
+            unit = (ctx["context"], label)
+            values = {c: [s[unit][c] for s in sheets if c in s[unit]] for c in CRITERIA}
+            for system in group:
+                for c in CRITERIA:
+                    out[c].setdefault(system, {})[ctx["context"]] = mean(values[c])
+                out["overall"].setdefault(system, {})[ctx["context"]] = mean(mean(v) for v in values.values())
+    return out
+
+
+def paired_differences(sheets: list[dict], key: dict, n_boot: int = 2000, seed: int = 0) -> dict:
+    """Mean difference between each pair of systems over the contexts both answered, with a 95% bootstrap
+    interval over contexts, per criterion and overall; and each system's overall mean on the test contexts
+    and on the handwritten messages separately."""
+    import itertools
+    import random
+    scores = per_context(sheets, key)
+    rng = random.Random(seed)
+    diffs = {}
+    for a, b in itertools.combinations(sorted(scores["overall"]), 2):
+        for c, table in scores.items():
+            d = [table[a][k] - table[b][k] for k in sorted(set(table[a]) & set(table[b]))]
+            boots = sorted(mean(rng.choice(d) for _ in d) for _ in range(n_boot))
+            diffs.setdefault(f"{a} - {b}", {})[c] = {"mean": round(mean(d), 3),
+                                                      "ci95": [round(boots[int(0.025 * n_boot)], 3),
+                                                               round(boots[int(0.975 * n_boot) - 1], 3)]}
+    kind = {ctx["context"]: "test" if isinstance(ctx["dialogue_id"], int) else "handwritten"
+            for ctx in key["contexts"]}
+    subsets = {k: {s: round(mean(v for ctx, v in table.items() if kind[ctx] == k), 3)
+                   for s, table in scores["overall"].items()} for k in sorted(set(kind.values()))}
+    return {"differences": diffs, "overall_by_subset": subsets}
+
+
 def main_score(args):
     if len(args.sheets) < 2:
         raise SystemExit("agreement needs at least two raters' sheets")
     key = json.loads(args.key.read_text(encoding="utf-8"))
     sheets = [read_sheet(p, args.allow_missing) for p in args.sheets]
     report = score(sheets, key, args.gap)
+    report.update(paired_differences(sheets, key))
     if args.judge:
         report["judge_agreement"] = judge_agreement(sheets, key, read_jsonl(args.judge))
     report["sheets"] = [str(p) for p in args.sheets]
@@ -242,6 +280,9 @@ def main_score(args):
     print(f"{'alpha (ord.)':<12}" + "".join(f"{report['alpha_ordinal'][c]:>17.3f}" for c in CRITERIA))
     if report["missing"]:
         print(f"missing ratings, left out: {report['missing']}")
+    print("overall mean by subset:", json.dumps(report["overall_by_subset"]))
+    for pair, d in report["differences"].items():
+        print(f"{pair}: overall {d['overall']['mean']} {d['overall']['ci95']}")
     for c, a in report.get("judge_agreement", {}).items():
         print(f"{c}: judge vs raters {a['judge_vs_raters']}, rater 1 vs rater 2 {a['rater1_vs_rater2']} ({a['replies']} replies)")
     print(f"\n{len(report['disagreements'])} ratings differ by {args.gap} or more points:")
