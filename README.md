@@ -1,7 +1,7 @@
 # Kaki: an emotional-support chatbot that plans, critiques and escalates
 
-CS425 Generative AI for Natural Language Communication (SMU, 2026), group G2T1: Kannappan Annamalai, Ernest Ng
-Chen Yi, Yong Huey, Gwee Wei Lin, Matthew Wilson.
+CS425 Generative AI for Natural Language Communication (SMU, 2026), group G2T1: GWEE Wei Lin, Annamalai
+KANNAPPAN, Denzyl NG, Ernest NG Chen Yi, Matthew WILSON, YONG Huey.
 
 Kaki ("buddy" in Singlish) is an English emotional-support chatbot for university students. Instead of one model
 guessing a reply, five small models work in turn: one checks for crisis messages, one reads how the seeker feels,

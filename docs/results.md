@@ -238,7 +238,7 @@ reliable (direct - look-ahead -0.06 [-0.13, +0.01]), and it rates the human repl
 
 ## Human evaluation
 
-Two raters who had not seen any output, Yong Huey (a team member) and Denzyl (from outside the team),
+Two team members who had not seen any output, YONG Huey and Denzyl NG,
 rated the 76 distinct replies blind (`docs/evaluation.md`): 20 test contexts and 5 handwritten Singlish messages, answered by
 direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. The first rater left one cell
 blank and supplied the rating afterwards. Mean over both raters:
