@@ -17,9 +17,7 @@ class FeedbackAuditTests(unittest.TestCase):
             {"speaker": "seeker", "annotation": {"feedback": "5"}},
         ]
         report = audit([{"dialog": turns}], [0])
-        self.assertEqual(
-            report["supporter_utterances_since_previous_rating"], {1: 1, 2: 1}
-        )
+        self.assertEqual(report["supporter_utterances_since_previous_rating"], {1: 1, 2: 1})
         self.assertEqual(report["immediately_preceding_supporter_block_length"], {1: 2})
 
 

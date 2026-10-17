@@ -15,6 +15,7 @@ procedure: docs/evaluation.md.
     python src/human_eval_sheet.py build --queries configs/eval_queries.json   # sheet.csv and key.json
     python src/human_eval_sheet.py score --sheets data/human_eval/rater1.csv data/human_eval/rater2.csv
 """
+
 import argparse
 import csv
 import json
@@ -55,11 +56,25 @@ def build(contexts: list[dict], outputs: dict[str, dict], seed: int = 42) -> tup
             writers.setdefault(outputs[config][ids]["reply"], []).append(config)
         groups = list(writers.items())
         rng.shuffle(groups)
-        key["contexts"].append({"context": number, "dialogue_id": ids[0], "utterance_idx": ids[1],
-                                "labels": {label: group for label, (_, group) in zip(LABELS, groups)}})
+        key["contexts"].append(
+            {
+                "context": number,
+                "dialogue_id": ids[0],
+                "utterance_idx": ids[1],
+                "labels": {label: group for label, (_, group) in zip(LABELS, groups)},
+            }
+        )
         for i, (label, (reply, _)) in enumerate(zip(LABELS, groups)):
-            sheet.append({"context": number, "label": label, "history": show_history(row["text"]) if i == 0 else "",
-                          "reply": reply, **dict.fromkeys(CRITERIA, ""), "comment": ""})
+            sheet.append(
+                {
+                    "context": number,
+                    "label": label,
+                    "history": show_history(row["text"]) if i == 0 else "",
+                    "reply": reply,
+                    **dict.fromkeys(CRITERIA, ""),
+                    "comment": "",
+                }
+            )
     return sheet, key
 
 
@@ -114,7 +129,7 @@ def krippendorff_alpha(units: list[list], level: str = "ordinal") -> float:
             return float(values[c] - values[d]) ** 2
         if level == "ordinal":
             lo, hi = min(c, d), max(c, d)
-            return (sum(totals[lo: hi + 1]) - (totals[c] + totals[d]) / 2) ** 2
+            return (sum(totals[lo : hi + 1]) - (totals[c] + totals[d]) / 2) ** 2
         raise ValueError(f"unknown level {level!r}")
 
     observed = sum(coincidence[c][d] * distance(c, d) for c in range(k) for d in range(k))
@@ -132,37 +147,53 @@ def score(sheets: list[dict], key: dict, gap: int = 2) -> dict:
     configs = sorted({config for group in configs_of.values() for config in group})
 
     def means(raters):
-        return {config: {c: mean(s[u][c] for s in raters for u in units if config in configs_of[u] and c in s[u])
-                         for c in CRITERIA} for config in configs}
+        return {
+            config: {
+                c: mean(s[u][c] for s in raters for u in units if config in configs_of[u] and c in s[u])
+                for c in CRITERIA
+            }
+            for config in configs
+        }
 
     def given(u, c):  # the ratings present for one reply and criterion; missing cells are left out
         return [s[u][c] for s in sheets if c in s[u]]
 
     return {
-        "raters": len(sheets), "units": len(units),
-        "missing": [{"rater": i, "context": u[0], "label": u[1], "criterion": c}
-                    for i, s in enumerate(sheets, 1) for u in units for c in CRITERIA if c not in s[u]],
+        "raters": len(sheets),
+        "units": len(units),
+        "missing": [
+            {"rater": i, "context": u[0], "label": u[1], "criterion": c}
+            for i, s in enumerate(sheets, 1)
+            for u in units
+            for c in CRITERIA
+            if c not in s[u]
+        ],
         "means": means(sheets),
         "means_per_rater": [means([s]) for s in sheets],
         "alpha_ordinal": {c: krippendorff_alpha([given(u, c) for u in units]) for c in CRITERIA},
-        "disagreements": [{"context": u[0], "label": u[1], "configs": configs_of[u], "criterion": c,
-                           "ratings": given(u, c)}
-                          for u in units for c in CRITERIA
-                          if len(given(u, c)) > 1 and max(given(u, c)) - min(given(u, c)) >= gap],
+        "disagreements": [
+            {"context": u[0], "label": u[1], "configs": configs_of[u], "criterion": c, "ratings": given(u, c)}
+            for u in units
+            for c in CRITERIA
+            if len(given(u, c)) > 1 and max(given(u, c)) - min(given(u, c)) >= gap
+        ],
     }
 
 
 def query_rows(path: Path) -> list[dict]:
     """Handwritten opening messages as context rows: a one-message history and no reference reply."""
     queries = json.loads(Path(path).read_text(encoding="utf-8"))["queries"]
-    return [{"dialogue_id": q["id"], "utterance_idx": 0, "text": f"seeker: {' '.join(q['text'].split())}"}
-            for q in queries]
+    return [
+        {"dialogue_id": q["id"], "utterance_idx": 0, "text": f"seeker: {' '.join(q['text'].split())}"} for q in queries
+    ]
 
 
 def query_outputs(path: Path) -> dict[str, dict]:
     """{system: {(query id, 0): {"reply": ...}}} from the replies src/benchmark.py saved."""
-    return {run["system"]: {(r["id"], 0): {"reply": r["reply"]} for r in run["replies"]}
-            for run in json.loads(Path(path).read_text(encoding="utf-8"))}
+    return {
+        run["system"]: {(r["id"], 0): {"reply": r["reply"]} for r in run["replies"]}
+        for run in json.loads(Path(path).read_text(encoding="utf-8"))
+    }
 
 
 def main_build(args):
@@ -170,8 +201,10 @@ def main_build(args):
     if (folder / "key.json").exists() and not args.overwrite:
         raise SystemExit(f"{folder / 'key.json'} exists; raters may already hold its sheet. Use --overwrite.")
     contexts = load_rows(args.data, args.contexts)
-    outputs = {c: {(r["dialogue_id"], r["utterance_idx"]): r for r in read_jsonl(args.outputs / f"{c}.jsonl")}
-               for c in args.systems}
+    outputs = {
+        c: {(r["dialogue_id"], r["utterance_idx"]): r for r in read_jsonl(args.outputs / f"{c}.jsonl")}
+        for c in args.systems
+    }
     if args.queries:
         contexts += query_rows(args.queries)
         for system, replies in query_outputs(args.query_replies).items():
@@ -184,12 +217,22 @@ def main_build(args):
         writer.writerows(sheet)
     (folder / "key.json").write_text(json.dumps(key, indent=1), encoding="utf-8")
     same = sum(len(k["labels"]) < len(args.systems) for k in key["contexts"])
-    print(json.dumps({"contexts": len(contexts), "replies_to_rate": len(sheet), "sheet": str(folder / "sheet.csv"),
-                      "key": str(folder / "key.json"), "contexts_with_a_shared_reply": same}))
+    print(
+        json.dumps(
+            {
+                "contexts": len(contexts),
+                "replies_to_rate": len(sheet),
+                "sheet": str(folder / "sheet.csv"),
+                "key": str(folder / "key.json"),
+                "contexts_with_a_shared_reply": same,
+            }
+        )
+    )
 
 
 def spearman(x: list, y: list) -> float:
     """Spearman's rank correlation, ties given their average rank."""
+
     def ranks(v):
         order = sorted(range(len(v)), key=v.__getitem__)
         r, i = [0.0] * len(v), 0
@@ -201,6 +244,7 @@ def spearman(x: list, y: list) -> float:
                 r[order[k]] = (i + j) / 2
             i = j + 1
         return r
+
     rx, ry = ranks(x), ranks(y)
     mx, my = mean(rx), mean(ry)
     cov = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
@@ -212,17 +256,24 @@ def judge_agreement(sheets: list[dict], key: dict, judge_rows: list[dict]) -> di
     """Per criterion: Spearman of the judge model's rating with the raters' mean rating, and of the first two
     raters with each other, over the replies the judge also rated (the test contexts, not the Singlish ones)."""
     judged = {(r["dialogue_id"], r["utterance_idx"]): r["scores"] for r in judge_rows if r["subset"] == "human_eval"}
-    units = [(c["context"], label, group[0], (c["dialogue_id"], c["utterance_idx"]))
-             for c in key["contexts"] for label, group in c["labels"].items()]
+    units = [
+        (c["context"], label, group[0], (c["dialogue_id"], c["utterance_idx"]))
+        for c in key["contexts"]
+        for label, group in c["labels"].items()
+    ]
     units = [u for u in units if u[3] in judged and judged[u[3]][u[2]]]
     out = {}
     for c in CRITERIA:
-        rows = [(judged[k][system][c], [s[(ctx, label)][c] for s in sheets if c in s[(ctx, label)]])
-                for ctx, label, system, k in units]
+        rows = [
+            (judged[k][system][c], [s[(ctx, label)][c] for s in sheets if c in s[(ctx, label)]])
+            for ctx, label, system, k in units
+        ]
         rows = [(j, h) for j, h in rows if len(h) == len(sheets)]
-        out[c] = {"replies": len(rows),
-                  "judge_vs_raters": round(spearman([j for j, _ in rows], [mean(h) for _, h in rows]), 3),
-                  "rater1_vs_rater2": round(spearman([h[0] for _, h in rows], [h[1] for _, h in rows]), 3)}
+        out[c] = {
+            "replies": len(rows),
+            "judge_vs_raters": round(spearman([j for j, _ in rows], [mean(h) for _, h in rows]), 3),
+            "rater1_vs_rater2": round(spearman([h[0] for _, h in rows], [h[1] for _, h in rows]), 3),
+        }
     return out
 
 
@@ -246,6 +297,7 @@ def paired_differences(sheets: list[dict], key: dict, n_boot: int = 2000, seed: 
     and on the handwritten messages separately."""
     import itertools
     import random
+
     scores = per_context(sheets, key)
     rng = random.Random(seed)
     diffs = {}
@@ -253,13 +305,17 @@ def paired_differences(sheets: list[dict], key: dict, n_boot: int = 2000, seed: 
         for c, table in scores.items():
             d = [table[a][k] - table[b][k] for k in sorted(set(table[a]) & set(table[b]))]
             boots = sorted(mean(rng.choice(d) for _ in d) for _ in range(n_boot))
-            diffs.setdefault(f"{a} - {b}", {})[c] = {"mean": round(mean(d), 3),
-                                                      "ci95": [round(boots[int(0.025 * n_boot)], 3),
-                                                               round(boots[int(0.975 * n_boot) - 1], 3)]}
-    kind = {ctx["context"]: "test" if isinstance(ctx["dialogue_id"], int) else "handwritten"
-            for ctx in key["contexts"]}
-    subsets = {k: {s: round(mean(v for ctx, v in table.items() if kind[ctx] == k), 3)
-                   for s, table in scores["overall"].items()} for k in sorted(set(kind.values()))}
+            diffs.setdefault(f"{a} - {b}", {})[c] = {
+                "mean": round(mean(d), 3),
+                "ci95": [round(boots[int(0.025 * n_boot)], 3), round(boots[int(0.975 * n_boot) - 1], 3)],
+            }
+    kind = {ctx["context"]: "test" if isinstance(ctx["dialogue_id"], int) else "handwritten" for ctx in key["contexts"]}
+    subsets = {
+        k: {
+            s: round(mean(v for ctx, v in table.items() if kind[ctx] == k), 3) for s, table in scores["overall"].items()
+        }
+        for k in sorted(set(kind.values()))
+    }
     return {"differences": diffs, "overall_by_subset": subsets}
 
 
@@ -284,10 +340,14 @@ def main_score(args):
     for pair, d in report["differences"].items():
         print(f"{pair}: overall {d['overall']['mean']} {d['overall']['ci95']}")
     for c, a in report.get("judge_agreement", {}).items():
-        print(f"{c}: judge vs raters {a['judge_vs_raters']}, rater 1 vs rater 2 {a['rater1_vs_rater2']} ({a['replies']} replies)")
+        print(
+            f"{c}: judge vs raters {a['judge_vs_raters']}, rater 1 vs rater 2 {a['rater1_vs_rater2']} ({a['replies']} replies)"
+        )
     print(f"\n{len(report['disagreements'])} ratings differ by {args.gap} or more points:")
     for d in report["disagreements"]:
-        print(f"  context {d['context']} reply {d['label']} ({', '.join(d['configs'])}), {d['criterion']}: {d['ratings']}")
+        print(
+            f"  context {d['context']} reply {d['label']} ({', '.join(d['configs'])}), {d['criterion']}: {d['ratings']}"
+        )
 
 
 def main():
@@ -299,8 +359,12 @@ def main():
     b.add_argument("--outputs", type=Path, default=ROOT / "data/outputs")
     b.add_argument("--systems", nargs="+", choices=SYSTEMS, default=list(SYSTEMS))
     b.add_argument("--queries", type=Path, help="handwritten messages to add, e.g. configs/eval_queries.json")
-    b.add_argument("--query-replies", type=Path, default=ROOT / "data/outputs/eval_queries/benchmark_cuda.json",
-                   help="replies to --queries saved by src/benchmark.py")
+    b.add_argument(
+        "--query-replies",
+        type=Path,
+        default=ROOT / "data/outputs/eval_queries/benchmark_cuda.json",
+        help="replies to --queries saved by src/benchmark.py",
+    )
     b.add_argument("--out", type=Path, default=ROOT / "data/human_eval")
     b.add_argument("--seed", type=int, default=42)
     b.add_argument("--overwrite", action="store_true")

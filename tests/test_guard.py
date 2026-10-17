@@ -6,6 +6,7 @@ the intended behaviour, and the seed-42 checkpoint fails four of their cases (se
 All cases are handwritten behavioural checks, not evidence of clinical reliability, and some of them
 informed the lexicon's design.
 """
+
 import json
 import os
 import sys
@@ -131,8 +132,11 @@ class InterfaceTests(unittest.TestCase):
         return [0.95 if "kill myself" in t else 0.05 for t in texts]
 
     def test_history_formats(self):
-        turns = [{"speaker": "seeker", "text": "hi"}, {"speaker": "supporter", "text": "hello"},
-                 {"speaker": "seeker", "text": " exams "}]
+        turns = [
+            {"speaker": "seeker", "text": "hi"},
+            {"speaker": "supporter", "text": "hello"},
+            {"speaker": "seeker", "text": " exams "},
+        ]
         self.assertEqual(seeker_turns(turns), ["hi", "exams"])
         self.assertEqual(seeker_turns("supporter: Hi there | seeker: could be better"), ["could be better"])
         self.assertEqual(seeker_turns("just one message"), ["just one message"])
@@ -151,8 +155,18 @@ class InterfaceTests(unittest.TestCase):
     def test_ordinary_distress_is_not_bypassed(self):
         out = self.guard.check([{"speaker": "seeker", "text": ORDINARY_DISTRESS[1]}])
         self.assertFalse(out["bypass_generation"])
-        self.assertEqual(set(out), {"risk_flag", "model_score", "predicted_label", "lexicon_matches",
-                                    "bypass_generation", "response_key", "trigger"})
+        self.assertEqual(
+            set(out),
+            {
+                "risk_flag",
+                "model_score",
+                "predicted_label",
+                "lexicon_matches",
+                "bypass_generation",
+                "response_key",
+                "trigger",
+            },
+        )
 
     def test_empty_history_rejected(self):
         with self.assertRaises(ValueError):
@@ -172,8 +186,9 @@ class TrainedGuardTests(unittest.TestCase):
         cls.guard = Guard(CHECKPOINT)
 
     def check(self, text):
-        return self.guard.check([{"speaker": "supporter", "text": "How have you been?"},
-                                 {"speaker": "seeker", "text": text}])
+        return self.guard.check(
+            [{"speaker": "supporter", "text": "How have you been?"}, {"speaker": "seeker", "text": text}]
+        )
 
     def test_escalation(self):
         for text in ESCALATE:

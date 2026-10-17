@@ -11,6 +11,7 @@ validation posts among thresholds whose bypass rate on ESConv validation turns s
 selection.max_bypass_rate. ESConv histories come from src/prep.py. The test splits are read only with
 --evaluate-test.
 """
+
 import argparse
 import collections
 import json
@@ -37,7 +38,10 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def set_seed(seed: int):
-    random.seed(seed); np.random.seed(seed); torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def binary_metrics(y, flags) -> dict:
@@ -60,8 +64,9 @@ def flags_at(scores, lexicon, t_model: float, t_lex: float) -> np.ndarray:
     return (scores >= t_model) | (lexicon & (scores >= t_lex))
 
 
-def select_thresholds(scores, lexicon, y, ref_scores, ref_lexicon, max_bypass_rate: float,
-                      step: float) -> tuple[float, float]:
+def select_thresholds(
+    scores, lexicon, y, ref_scores, ref_lexicon, max_bypass_rate: float, step: float
+) -> tuple[float, float]:
     """(model, lexicon) threshold pair with the highest recall on the risk-labelled posts, among pairs that
     bypass at most max_bypass_rate of the reference ESConv turns. The lexicon threshold is at most the
     model threshold. Ties go to higher precision, then to higher thresholds (fewer flags)."""
@@ -85,8 +90,12 @@ def bypass_stats(rows: list[dict], flags) -> dict:
     by_dialogue = collections.defaultdict(bool)
     for r, f in zip(rows, flags):
         by_dialogue[r["dialogue_id"]] |= bool(f)
-    return {"turns": len(rows), "turn_rate": round(float(np.mean(flags)), 4),
-            "dialogues": len(by_dialogue), "dialogue_rate": round(sum(by_dialogue.values()) / len(by_dialogue), 4)}
+    return {
+        "turns": len(rows),
+        "turn_rate": round(float(np.mean(flags)), 4),
+        "dialogues": len(by_dialogue),
+        "dialogue_rate": round(sum(by_dialogue.values()) / len(by_dialogue), 4),
+    }
 
 
 def bootstrap_ci(groups, y, flags, n_boot: int = 1000, seed: int = 0) -> dict:
@@ -116,21 +125,36 @@ def report(rows: list[dict], scores, thresholds: dict) -> tuple[dict, list[dict]
         "classifier_only": scores >= thresholds["model_only"],
         "lexicon_only": affirmed([r["text"] for r in rows]),
     }
-    out = {"posts": len(rows), "risk_posts": int(y.sum()), "users": len(set(groups)),
-           "average_precision": float(average_precision_score(y, scores)),
-           "roc_auc": float(roc_auc_score(y, scores)), "rules": {}}
+    out = {
+        "posts": len(rows),
+        "risk_posts": int(y.sum()),
+        "users": len(set(groups)),
+        "average_precision": float(average_precision_score(y, scores)),
+        "roc_auc": float(roc_auc_score(y, scores)),
+        "rules": {},
+    }
     for name, flags in rules.items():
         out["rules"][name] = {**binary_metrics(y, flags), "ci95": bootstrap_ci(groups, y, flags)}
     flagged = collections.defaultdict(lambda: [0, 0])
     for r, d in zip(rows, decisions):
         flagged[r["label_raw"]][0] += 1
         flagged[r["label_raw"]][1] += d["risk_flag"]
-    out["combined_flag_rate_by_label"] = {k: {"posts": n, "flagged": f, "rate": round(f / n, 3)}
-                                          for k, (n, f) in sorted(flagged.items())}
+    out["combined_flag_rate_by_label"] = {
+        k: {"posts": n, "flagged": f, "rate": round(f / n, 3)} for k, (n, f) in sorted(flagged.items())
+    }
     out["combined_triggers"] = dict(collections.Counter(d["trigger"] for d in decisions if d["trigger"]))
-    preds = [{"id": r["id"], "label": r["label"], "label_raw": r["label_raw"], "score": round(float(s), 5),
-              "lexicon_affirmed": bool(lex), "risk_flag": d["risk_flag"], "trigger": d["trigger"]}
-             for r, s, lex, d in zip(rows, scores, rules["lexicon_only"], decisions)]
+    preds = [
+        {
+            "id": r["id"],
+            "label": r["label"],
+            "label_raw": r["label_raw"],
+            "score": round(float(s), 5),
+            "lexicon_affirmed": bool(lex),
+            "risk_flag": d["risk_flag"],
+            "trigger": d["trigger"],
+        }
+        for r, s, lex, d in zip(rows, scores, rules["lexicon_only"], decisions)
+    ]
     return out, preds
 
 
@@ -141,8 +165,8 @@ def length_batches(n_rows: int, lengths: list[int], batch_size: int, rng: random
     rng.shuffle(idx)
     chunk, batches = batch_size * 50, []
     for start in range(0, n_rows, chunk):
-        part = sorted(idx[start: start + chunk], key=lambda i: lengths[i])
-        batches += [part[j: j + batch_size] for j in range(0, len(part), batch_size)]
+        part = sorted(idx[start : start + chunk], key=lambda i: lengths[i])
+        batches += [part[j : j + batch_size] for j in range(0, len(part), batch_size)]
     rng.shuffle(batches)
     return batches
 
@@ -159,17 +183,23 @@ def train(cfg: dict, args, data: dict, device: str) -> tuple[list[dict], list[fl
     tcfg = cfg["train"]
     tok = AutoTokenizer.from_pretrained(tcfg["model_name"], truncation_side="left")
     model = AutoModelForSequenceClassification.from_pretrained(
-        tcfg["model_name"], num_labels=2, id2label=dict(enumerate(LABELS)),
-        label2id={name: i for i, name in enumerate(LABELS)}).to(device)
+        tcfg["model_name"],
+        num_labels=2,
+        id2label=dict(enumerate(LABELS)),
+        label2id={name: i for i, name in enumerate(LABELS)},
+    ).to(device)
 
     def collate(rows):
-        enc = tok([r["text"] for r in rows], truncation=True, max_length=tcfg["max_len"],
-                  padding=True, return_tensors="pt")
+        enc = tok(
+            [r["text"] for r in rows], truncation=True, max_length=tcfg["max_len"], padding=True, return_tensors="pt"
+        )
         enc["labels"] = torch.tensor([r["label"] for r in rows])
         return enc
 
     rows = data["train"]
-    lengths = [len(ids) for ids in tok([r["text"] for r in rows], truncation=True, max_length=tcfg["max_len"])["input_ids"]]
+    lengths = [
+        len(ids) for ids in tok([r["text"] for r in rows], truncation=True, max_length=tcfg["max_len"])["input_ids"]
+    ]
     rng = random.Random(tcfg["seed"])
     n_batches = -(-len(rows) // tcfg["batch_size"])
 
@@ -202,13 +232,21 @@ def train(cfg: dict, args, data: dict, device: str) -> tuple[list[dict], list[fl
             scaler.scale(loss).backward()
             scaler.unscale_(opt)
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            scaler.step(opt); scaler.update(); sched.step()
+            scaler.step(opt)
+            scaler.update()
+            sched.step()
             running += loss.item()
 
         scores = risk_scores(model, tok, val_texts, tcfg["max_len"])
         ap = float(average_precision_score(val_y, scores))
-        history.append({"epoch": epoch, "train_loss": running / n_batches, "val_average_precision": ap,
-                        "seconds": round(time.time() - t0)})
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": running / n_batches,
+                "val_average_precision": ap,
+                "seconds": round(time.time() - t0),
+            }
+        )
         print(f"epoch {epoch}: loss {running / n_batches:.4f} | val AP {ap:.3f} | {time.time() - t0:.0f}s", flush=True)
         if ap > best_ap:
             best_ap, best_scores = ap, scores
@@ -235,17 +273,26 @@ def select_on_val(output: Path, cfg: dict, val_rows: list[dict], esconv_rows: li
     operating_points = {}
     for cap in sorted({0.01, 0.02, 0.05, 0.10, sel["max_bypass_rate"]}):
         point = {}
-        for rule, l, rl in (("combined", lex, ref_lex),
-                            ("classifier_only", np.zeros_like(lex), np.zeros_like(ref_lex))):
+        for rule, l, rl in (
+            ("combined", lex, ref_lex),
+            ("classifier_only", np.zeros_like(lex), np.zeros_like(ref_lex)),
+        ):
             t_model, t_lex = select_thresholds(scores, l, y, ref_scores, rl, cap, sel["grid_step"])
-            point[rule] = {"model": t_model, "lexicon": t_lex,
-                           **binary_metrics(y, flags_at(scores, l, t_model, t_lex)),
-                           "esconv_val": bypass_stats(esconv_rows, flags_at(ref_scores, rl, t_model, t_lex))}
+            point[rule] = {
+                "model": t_model,
+                "lexicon": t_lex,
+                **binary_metrics(y, flags_at(scores, l, t_model, t_lex)),
+                "esconv_val": bypass_stats(esconv_rows, flags_at(ref_scores, rl, t_model, t_lex)),
+            }
         operating_points[str(cap)] = point
     chosen = operating_points[str(sel["max_bypass_rate"])]
-    thresholds = {"model": chosen["combined"]["model"], "lexicon": chosen["combined"]["lexicon"],
-                  "model_only": chosen["classifier_only"]["model"],
-                  "max_bypass_rate": sel["max_bypass_rate"], "selected_on": "validation"}
+    thresholds = {
+        "model": chosen["combined"]["model"],
+        "lexicon": chosen["combined"]["lexicon"],
+        "model_only": chosen["classifier_only"]["model"],
+        "max_bypass_rate": sel["max_bypass_rate"],
+        "selected_on": "validation",
+    }
     (output / "thresholds.json").write_text(json.dumps(thresholds, indent=1))
     return scores, thresholds, operating_points
 
@@ -256,12 +303,19 @@ def main():
     ap.add_argument("--output", type=Path, default=ROOT / "checkpoints/guard")
     ap.add_argument("--config", type=Path, default=CONFIG)
     ap.add_argument("--smoke", action="store_true", help="tiny subset, 1 epoch, short inputs; never reads test")
-    ap.add_argument("--select", action="store_true",
-                    help="re-select thresholds on validation for a trained checkpoint (e.g. after changing "
-                         "selection.max_bypass_rate), without retraining")
+    ap.add_argument(
+        "--select",
+        action="store_true",
+        help="re-select thresholds on validation for a trained checkpoint (e.g. after changing "
+        "selection.max_bypass_rate), without retraining",
+    )
     ap.add_argument("--evaluate-test", action="store_true", help="score the test splits once with a trained checkpoint")
-    ap.add_argument("--flag-rate", type=Path, metavar="JSONL",
-                    help="histories in src/prep.py format: report how often a trained Guard bypasses generation")
+    ap.add_argument(
+        "--flag-rate",
+        type=Path,
+        metavar="JSONL",
+        help="histories in src/prep.py format: report how often a trained Guard bypasses generation",
+    )
     args = ap.parse_args()
     if args.smoke and (args.select or args.evaluate_test or args.flag_rate):
         ap.error("smoke runs only train and validate")
@@ -276,15 +330,19 @@ def main():
     if args.flag_rate:
         rows = read_jsonl(args.flag_rate)
         results = Guard(args.output, args.config, device).check_batch([r["text"] for r in rows])
-        summary = {"file": str(args.flag_rate), **bypass_stats(rows, [r["bypass_generation"] for r in results]),
-                   "triggers": dict(collections.Counter(r["trigger"] for r in results if r["trigger"]))}
+        summary = {
+            "file": str(args.flag_rate),
+            **bypass_stats(rows, [r["bypass_generation"] for r in results]),
+            "triggers": dict(collections.Counter(r["trigger"] for r in results if r["trigger"])),
+        }
         print(json.dumps(summary, indent=1))
         return
 
     if args.select:
         rows = read_jsonl(args.data / "val.jsonl")
-        scores, thresholds, operating_points = select_on_val(args.output, cfg, rows,
-                                                             read_jsonl(esconv_dir / "val.jsonl"), device)
+        scores, thresholds, operating_points = select_on_val(
+            args.output, cfg, rows, read_jsonl(esconv_dir / "val.jsonl"), device
+        )
         val_metrics, val_preds = report(rows, scores, thresholds)
         write_jsonl(args.output / "preds_val.jsonl", val_preds)
         run = json.loads((args.output / "run.json").read_text())
@@ -299,8 +357,10 @@ def main():
         metrics, preds = report(rows, guard.score([r["text"] for r in rows]), guard.thresholds)
         esconv = read_jsonl(esconv_dir / "test.jsonl")
         results = guard.check_batch([r["text"] for r in esconv])
-        metrics["esconv_test"] = {**bypass_stats(esconv, [r["bypass_generation"] for r in results]),
-                                  "triggers": dict(collections.Counter(r["trigger"] for r in results if r["trigger"]))}
+        metrics["esconv_test"] = {
+            **bypass_stats(esconv, [r["bypass_generation"] for r in results]),
+            "triggers": dict(collections.Counter(r["trigger"] for r in results if r["trigger"])),
+        }
         (args.output / "test_metrics.json").write_text(json.dumps(metrics, indent=1))
         write_jsonl(args.output / "preds_test.jsonl", preds)
         print(json.dumps(metrics, indent=1))
@@ -322,8 +382,16 @@ def main():
         cfg["train"].update(epochs=1, max_len=SMOKE["max_len"])
         args.config = args.output / "smoke_config.json"
         args.config.write_text(json.dumps(cfg, indent=1))
-    print({s: len(rows) for s, rows in data.items()}, "| device:", device, "| torch", torch.__version__,
-          "| transformers", transformers.__version__, flush=True)
+    print(
+        {s: len(rows) for s, rows in data.items()},
+        "| device:",
+        device,
+        "| torch",
+        torch.__version__,
+        "| transformers",
+        transformers.__version__,
+        flush=True,
+    )
 
     t0 = time.time()
     history, best_scores = train(cfg, args, data, device)
@@ -334,21 +402,43 @@ def main():
 
     # end-to-end inference check through the public interface, using the reloaded files
     guard = Guard(args.output, args.config, device)
-    check = guard.check([{"speaker": "supporter", "text": "How are you feeling today?"},
-                         {"speaker": "seeker", "text": data["val"][0]["text"]}])
+    check = guard.check(
+        [
+            {"speaker": "supporter", "text": "How are you feeling today?"},
+            {"speaker": "seeker", "text": data["val"][0]["text"]},
+        ]
+    )
     if abs(check["model_score"] - val_scores[0]) > 1e-4:
         raise RuntimeError("Guard.check score differs from the trainer's score for the same text")
 
     val_metrics, val_preds = report(data["val"], val_scores, thresholds)
     write_jsonl(args.output / "preds_val.jsonl", val_preds)
-    run = {"config": cfg, "smoke": args.smoke, "data": {s: len(rows) for s, rows in data.items()},
-           "device": device, "torch": torch.__version__, "transformers": transformers.__version__,
-           "history": history, "reload_max_abs_diff": reload_diff, "thresholds": thresholds,
-           "val_operating_points": operating_points, "val": val_metrics,
-           "minutes": round((time.time() - t0) / 60, 1)}
+    run = {
+        "config": cfg,
+        "smoke": args.smoke,
+        "data": {s: len(rows) for s, rows in data.items()},
+        "device": device,
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
+        "history": history,
+        "reload_max_abs_diff": reload_diff,
+        "thresholds": thresholds,
+        "val_operating_points": operating_points,
+        "val": val_metrics,
+        "minutes": round((time.time() - t0) / 60, 1),
+    }
     (args.output / "run.json").write_text(json.dumps(run, indent=1))
-    print(json.dumps({"thresholds": thresholds, "reload_max_abs_diff": reload_diff,
-                      "val (thresholds chosen here, optimistic)": val_metrics["rules"]}, indent=1))
+    print(
+        json.dumps(
+            {
+                "thresholds": thresholds,
+                "reload_max_abs_diff": reload_diff,
+                "val (thresholds chosen here, optimistic)": val_metrics["rules"],
+            },
+            indent=1,
+        )
+    )
+
 
 if __name__ == "__main__":
     main()

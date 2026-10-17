@@ -18,6 +18,7 @@ Usage, from the repository root with src on the import path:
 
 Chat in a terminal:  python src/pipeline.py --config lookahead
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -41,8 +42,7 @@ class Kaki:
         self.critic_weight = critic_weight
 
     @classmethod
-    def load(cls, checkpoints=ROOT / "checkpoints", configs=CONFIGS, critic=None, critic_weight=1.0,
-             device=None):
+    def load(cls, checkpoints=ROOT / "checkpoints", configs=CONFIGS, critic=None, critic_weight=1.0, device=None):
         """Load the trained components that `configs` need from checkpoints/{guard,perceive,plan,speak-*}.
         Each Speak adapter loads its own copy of the base model, so load only the configurations you use."""
         from guard import Guard
@@ -57,21 +57,36 @@ class Kaki:
             weight = json.loads(tuned.read_text(encoding="utf-8"))["critic_weight"]
             if weight is not None:  # None: validation preferred planner probability alone
                 from critic import Critic
+
                 critic, critic_weight = Critic(checkpoints / "critic", device), weight
         speakers = {}
         if "direct" in configs:
             speakers["history"] = Speaker(checkpoints / "speak-history", device)
         if needs_plan:
             speakers["conditioned"] = Speaker(checkpoints / "speak-conditioned", device)
-        return cls(Guard(checkpoints / "guard", device=device), Perceiver(checkpoints / "perceive", device=device),
-                   Planner(checkpoints / "plan", device) if needs_plan else None, speakers, critic, critic_weight)
+        return cls(
+            Guard(checkpoints / "guard", device=device),
+            Perceiver(checkpoints / "perceive", device=device),
+            Planner(checkpoints / "plan", device) if needs_plan else None,
+            speakers,
+            critic,
+            critic_weight,
+        )
 
     def respond(self, turns: list[dict], config: str = "lookahead") -> dict:
         """Reply to the latest seeker turn. Every intermediate decision is returned for the interface."""
         if config not in CONFIGS:
             raise ValueError(f"config must be one of {CONFIGS}")
-        out = {"config": config, "reply": None, "bypassed": False, "guard": self.guard.check(turns),
-               "perceive": None, "strategies": None, "candidates": [], "selected": None}
+        out = {
+            "config": config,
+            "reply": None,
+            "bypassed": False,
+            "guard": self.guard.check(turns),
+            "perceive": None,
+            "strategies": None,
+            "candidates": [],
+            "selected": None,
+        }
         if out["guard"]["bypass_generation"]:
             out.update(reply=self.guard.response(out["guard"]["response_key"]), bypassed=True)
             return out
@@ -80,20 +95,29 @@ class Kaki:
         out["perceive"] = self.perceiver.predict(history)
         emotion = out["perceive"]["emotion"]
         if config == "direct":
-            candidates = [{"strategy": None, "planner_probability": None,
-                           "response": self.speakers["history"].generate(history)}]
+            candidates = [
+                {"strategy": None, "planner_probability": None, "response": self.speakers["history"].generate(history)}
+            ]
         else:
             out["strategies"] = self.planner.predict(history)
             speaker = self.speakers["conditioned"]
             if config == "planning":
                 top = out["strategies"][0]
-                candidates = [{"strategy": top["strategy"], "planner_probability": top["probability"],
-                               "response": speaker.generate(history, emotion, top["strategy"])}]
+                candidates = [
+                    {
+                        "strategy": top["strategy"],
+                        "planner_probability": top["probability"],
+                        "response": speaker.generate(history, emotion, top["strategy"]),
+                    }
+                ]
             else:
                 candidates = speaker.generate_candidates(history, emotion, out["strategies"])
 
-        critic_scores = (self.critic(history, [c["response"] for c in candidates])
-                         if self.critic is not None and config == "lookahead" else [None] * len(candidates))
+        critic_scores = (
+            self.critic(history, [c["response"] for c in candidates])
+            if self.critic is not None and config == "lookahead"
+            else [None] * len(candidates)
+        )
         for c, s in zip(candidates, critic_scores):
             c["critic_score"] = s
             if c["planner_probability"] is None:  # direct: a single reply, nothing to rank

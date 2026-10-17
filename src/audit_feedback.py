@@ -1,8 +1,8 @@
 """Count feedback intervals without assigning multi-utterance ratings to one reply."""
 
 import argparse
-from collections import Counter
 import json
+from collections import Counter
 from pathlib import Path
 
 
@@ -22,18 +22,14 @@ def audit(dialogues, ids):
                 block = 0
     return {
         "supporter_utterances_since_previous_rating": dict(sorted(intervals.items())),
-        "immediately_preceding_supporter_block_length": dict(
-            sorted(immediate_blocks.items())
-        ),
+        "immediately_preceding_supporter_block_length": dict(sorted(immediate_blocks.items())),
     }
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw", type=Path, default=Path("data/raw/ESConv.json"))
-    parser.add_argument(
-        "--splits", type=Path, default=Path("data/processed/downstream/splits.json")
-    )
+    parser.add_argument("--splits", type=Path, default=Path("data/processed/downstream/splits.json"))
     parser.add_argument(
         "--output",
         type=Path,

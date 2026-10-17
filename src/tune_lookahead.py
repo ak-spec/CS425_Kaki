@@ -10,6 +10,7 @@ not bypassed by Guard are used. The chosen weight is written to CRITIC/lookahead
         --configs lookahead --critic checkpoints/critic --output data/outputs-val
     python src/tune_lookahead.py --outputs data/outputs-val/lookahead.jsonl --critic checkpoints/critic
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -23,10 +24,12 @@ WEIGHTS = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, None]  # None: planner probabilit
 
 def select(candidates: list[dict], weight) -> int:
     """Index of the candidate the pipeline would send with this weight."""
+
     def score(c):
         if weight is None:
             return c["planner_probability"]
         return c["critic_score"] + weight * c["planner_probability"]
+
     return max(range(len(candidates)), key=lambda i: score(candidates[i]))
 
 
@@ -44,9 +47,13 @@ def sweep(rows: list[dict], f1: list[list[float]]) -> list[dict]:
     table = []
     for weight in WEIGHTS:
         chosen = [select(r["candidates"], weight) for r in rows]
-        table.append({"weight": "planner only" if weight is None else weight,
-                      "bertscore_f1": round(float(np.mean([f[c] for f, c in zip(f1, chosen)])), 4),
-                      "differs_from_planning": round(float(np.mean([c != p for c, p in zip(chosen, planner)])), 3)})
+        table.append(
+            {
+                "weight": "planner only" if weight is None else weight,
+                "bertscore_f1": round(float(np.mean([f[c] for f, c in zip(f1, chosen)])), 4),
+                "differs_from_planning": round(float(np.mean([c != p for c, p in zip(chosen, planner)])), 3),
+            }
+        )
     return table
 
 
@@ -65,19 +72,27 @@ def main():
         raise ValueError("outputs have no critic scores; generate them with --critic")
 
     score, bertscore_hash = bert_scorer(args.bertscore_model, args.bertscore_layer)
-    flat = score([c["response"] for r in rows for c in r["candidates"]],
-                 [r["reference"] for r in rows for _ in r["candidates"]])
-    f1 = [list(flat[3 * i: 3 * i + 3]) for i in range(len(rows))]
+    flat = score(
+        [c["response"] for r in rows for c in r["candidates"]], [r["reference"] for r in rows for _ in r["candidates"]]
+    )
+    f1 = [list(flat[3 * i : 3 * i + 3]) for i in range(len(rows))]
 
     table = sweep(rows, f1)
     best = max(table, key=lambda t: t["bertscore_f1"])
     weight = None if best["weight"] == "planner only" else best["weight"]
     planner = [select(r["candidates"], None) for r in rows]
     chosen = [select(r["candidates"], weight) for r in rows]
-    result = {"critic_weight": weight, "selected_on": "validation", "histories": len(rows),
-              "bertscore": bertscore_hash, "table": table,
-              "best_minus_planner_only": {"mean": round(float(np.mean([f[c] - f[p] for f, c, p in zip(f1, chosen, planner)])), 4),
-                                          "ci95": paired_interval([f[c] - f[p] for f, c, p in zip(f1, chosen, planner)])}}
+    result = {
+        "critic_weight": weight,
+        "selected_on": "validation",
+        "histories": len(rows),
+        "bertscore": bertscore_hash,
+        "table": table,
+        "best_minus_planner_only": {
+            "mean": round(float(np.mean([f[c] - f[p] for f, c, p in zip(f1, chosen, planner)])), 4),
+            "ci95": paired_interval([f[c] - f[p] for f, c, p in zip(f1, chosen, planner)]),
+        },
+    }
     (args.critic / "lookahead.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps(result, indent=1))
 

@@ -29,9 +29,7 @@ class DataTests(unittest.TestCase):
             ]
         }
         rows, pairs, stats = build_rows(1, dialogue, {})
-        self.assertEqual(
-            [r["strategy"] for r in rows], ["Reflection of feelings", "Question"]
-        )
+        self.assertEqual([r["strategy"] for r in rows], ["Reflection of feelings", "Question"])
         self.assertNotIn("I hear you", rows[0]["text"])
         self.assertIn("I hear you", rows[1]["text"])
         self.assertNotIn("future secret", pairs[0]["text"] + pairs[0]["response"])

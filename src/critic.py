@@ -11,6 +11,7 @@ Usage, from the repository root with src on the import path:
     critic("seeker: I failed my midterm.", ["reply one", "reply two", "reply three"])
 A Critic instance is the `critic` callable that src/pipeline.py accepts.
 """
+
 from pathlib import Path
 
 import torch
@@ -34,9 +35,15 @@ def predict_ratings(model, tokenizer, histories, replies, max_len=512, batch_siz
     order = sorted(range(len(histories)), key=lambda i: len(histories[i]) + len(replies[i]))
     out = [0.0] * len(histories)
     for start in range(0, len(order), batch_size):
-        idx = order[start: start + batch_size]
-        enc = tokenizer([histories[i] for i in idx], [replies[i] for i in idx], truncation="only_first",
-                        max_length=max_len, padding=True, return_tensors="pt").to(device)
+        idx = order[start : start + batch_size]
+        enc = tokenizer(
+            [histories[i] for i in idx],
+            [replies[i] for i in idx],
+            truncation="only_first",
+            max_length=max_len,
+            padding=True,
+            return_tensors="pt",
+        ).to(device)
         for i, value in zip(idx, model(**enc).logits.float().squeeze(-1).tolist()):
             out[i] = to_rating(value)
     return out
@@ -48,8 +55,11 @@ class Critic:
         self.max_len = max_len
         self.tokenizer = AutoTokenizer.from_pretrained(Path(checkpoint))
         self.tokenizer.truncation_side = "left"
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            Path(checkpoint), dtype=torch.float32).to(self.device).eval()
+        self.model = (
+            AutoModelForSequenceClassification.from_pretrained(Path(checkpoint), dtype=torch.float32)
+            .to(self.device)
+            .eval()
+        )
 
     def __call__(self, history: str, replies: list[str]) -> list[float]:
         """One predicted rating per candidate reply for the same history."""

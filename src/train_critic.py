@@ -18,6 +18,7 @@ rating, position in the dialogue, reply length) and two checks that the score de
 accuracy on rating pairs that go against the conversation's upward trend, and how often the real reply
 outscores a reply taken from another dialogue.
 """
+
 import argparse
 import collections
 import json
@@ -47,7 +48,7 @@ def split_halves(dialogue_ids, seed: int) -> dict[str, list[int]]:
     """Training dialogues in two disjoint halves; the same seed always gives the same halves."""
     ids = sorted(set(dialogue_ids))
     random.Random(seed).shuffle(ids)
-    return {"a": sorted(ids[: len(ids) // 2]), "b": sorted(ids[len(ids) // 2:])}
+    return {"a": sorted(ids[: len(ids) // 2]), "b": sorted(ids[len(ids) // 2 :])}
 
 
 def rating_pairs(rows: list[dict]) -> list[tuple[int, int]]:
@@ -55,16 +56,16 @@ def rating_pairs(rows: list[dict]) -> list[tuple[int, int]]:
     by_dialogue = collections.defaultdict(list)
     for i, r in enumerate(rows):
         by_dialogue[r["dialogue_id"]].append(i)
-    return [(i, j) for idx in by_dialogue.values() for i in idx for j in idx
-            if rows[i]["feedback"] > rows[j]["feedback"]]
+    return [
+        (i, j) for idx in by_dialogue.values() for i in idx for j in idx if rows[i]["feedback"] > rows[j]["feedback"]
+    ]
 
 
 def pair_accuracy(pairs, values) -> float:
     """Share of pairs ordered correctly by values; ties count half."""
     if not pairs:
         return float("nan")
-    return float(np.mean([1.0 if values[i] > values[j] else 0.5 if values[i] == values[j] else 0.0
-                          for i, j in pairs]))
+    return float(np.mean([1.0 if values[i] > values[j] else 0.5 if values[i] == values[j] else 0.0 for i, j in pairs]))
 
 
 def other_replies(rows: list[dict], seed: int) -> list[str]:
@@ -88,7 +89,9 @@ def evaluate(rows, preds, preds_other, train_mean: float) -> dict:
     position = [r["response_start_idx"] for r in rows]
     against = [(i, j) for i, j in pairs if position[i] < position[j]]  # the earlier block was rated higher
     return {
-        "rows": len(rows), "pairs": len(pairs), "against_trend_pairs": len(against),
+        "rows": len(rows),
+        "pairs": len(pairs),
+        "against_trend_pairs": len(against),
         "mae": float(np.abs(preds - ratings).mean()),
         "mae_constant": float(np.abs(train_mean - ratings).mean()),
         "spearman": float(spearmanr(preds, ratings).statistic),
@@ -97,8 +100,9 @@ def evaluate(rows, preds, preds_other, train_mean: float) -> dict:
         "pairwise_length_baseline": pair_accuracy(pairs, [len(r["response"]) for r in rows]),
         "against_trend_accuracy": pair_accuracy(against, preds),
         "beats_other_reply": float((preds > preds_other).mean()),
-        "mean_prediction_by_rating": {int(k): round(float(preds[ratings == k].mean()), 3)
-                                      for k in sorted(set(ratings.tolist()))},
+        "mean_prediction_by_rating": {
+            int(k): round(float(preds[ratings == k].mean()), 3) for k in sorted(set(ratings.tolist()))
+        },
     }
 
 
@@ -120,9 +124,13 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--max-length", type=int, default=512)
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--contrast-weight", type=float, default=0.0,
-                    help="weight of a margin loss that ranks the real reply above one from another dialogue "
-                         "for the same history; 0 trains on ratings only")
+    ap.add_argument(
+        "--contrast-weight",
+        type=float,
+        default=0.0,
+        help="weight of a margin loss that ranks the real reply above one from another dialogue "
+        "for the same history; 0 trains on ratings only",
+    )
     ap.add_argument("--smoke", action="store_true", help="64 rows, 1 epoch, 128 tokens; never reads test")
     ap.add_argument("--evaluate-test", action="store_true", help="score the test split once with a trained checkpoint")
     args = ap.parse_args()
@@ -136,14 +144,18 @@ def main():
         tok.truncation_side = "left"
         model = AutoModelForSequenceClassification.from_pretrained(args.output, dtype=torch.float32).to(device)
         rows = read_jsonl(args.data / "critic_proxy_test.jsonl")
-        metrics = evaluate(rows, *score_split(model, tok, rows, run["args"]["max_length"], args.seed), run["train_mean"])
+        metrics = evaluate(
+            rows, *score_split(model, tok, rows, run["args"]["max_length"], args.seed), run["train_mean"]
+        )
         (args.output / "test_metrics.json").write_text(json.dumps(metrics, indent=1), encoding="utf-8")
         print(json.dumps(metrics, indent=1))
         return
 
     if (args.output / "config.json").exists():
         ap.error(f"{args.output} already holds a model; choose a new --output to keep it")
-    random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     train_all = read_jsonl(args.data / "critic_proxy_train.jsonl")
     halves = split_halves([r["dialogue_id"] for r in train_all], args.seed)
     keep = set(halves[args.half])
@@ -159,8 +171,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(args.model)
     tok.truncation_side = "left"
     # the hub checkpoint is stored in fp16 and trains to NaN in that dtype, so load fp32 explicitly
-    model = AutoModelForSequenceClassification.from_pretrained(args.model, num_labels=1,
-                                                               dtype=torch.float32).to(device)
+    model = AutoModelForSequenceClassification.from_pretrained(args.model, num_labels=1, dtype=torch.float32).to(device)
     steps = -(-len(train) // args.batch_size) * args.epochs
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     sched = get_linear_schedule_with_warmup(opt, int(0.1 * steps), steps)
@@ -175,18 +186,30 @@ def main():
         others = other_replies(train, args.seed + epoch) if args.contrast_weight else None
         running = 0.0
         for start in range(0, len(order), args.batch_size):
-            idx = order[start: start + args.batch_size]
+            idx = order[start : start + args.batch_size]
             batch = [train[i] for i in idx]
-            enc = tok([r["text"] for r in batch], [r["response"] for r in batch], truncation="only_first",
-                      max_length=args.max_length, padding=True, return_tensors="pt").to(device)
+            enc = tok(
+                [r["text"] for r in batch],
+                [r["response"] for r in batch],
+                truncation="only_first",
+                max_length=args.max_length,
+                padding=True,
+                return_tensors="pt",
+            ).to(device)
             target = torch.tensor([to_target(r["feedback"]) for r in batch], device=device)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
                 out = model(**enc).logits.squeeze(-1)
             loss = nn.functional.mse_loss(out.float(), target)
             if args.contrast_weight:
                 # the real reply should outscore a reply from another dialogue for the same history
-                enc_other = tok([r["text"] for r in batch], [others[i] for i in idx], truncation="only_first",
-                                max_length=args.max_length, padding=True, return_tensors="pt").to(device)
+                enc_other = tok(
+                    [r["text"] for r in batch],
+                    [others[i] for i in idx],
+                    truncation="only_first",
+                    max_length=args.max_length,
+                    padding=True,
+                    return_tensors="pt",
+                ).to(device)
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
                     out_other = model(**enc_other).logits.squeeze(-1)
                 margin = nn.functional.relu(CONTRAST_MARGIN - (out.float() - out_other.float())).mean()
@@ -196,12 +219,21 @@ def main():
             opt.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step(); sched.step()
+            opt.step()
+            sched.step()
             running += loss.item() * len(batch)
         metrics = evaluate(val, *score_split(model, tok, val, args.max_length, args.seed), train_mean)
         history.append({"epoch": epoch, "train_loss": running / len(train), "val": metrics})
-        print(json.dumps({"epoch": epoch, "train_loss": round(running / len(train), 4),
-                          **{k: round(v, 3) for k, v in metrics.items() if isinstance(v, float)}}), flush=True)
+        print(
+            json.dumps(
+                {
+                    "epoch": epoch,
+                    "train_loss": round(running / len(train), 4),
+                    **{k: round(v, 3) for k, v in metrics.items() if isinstance(v, float)},
+                }
+            ),
+            flush=True,
+        )
         if metrics["pairwise_accuracy"] > best:
             best = metrics["pairwise_accuracy"]
             model.save_pretrained(args.output)
@@ -210,10 +242,19 @@ def main():
     # reload the kept checkpoint from disk and report validation from it
     model = AutoModelForSequenceClassification.from_pretrained(args.output, dtype=torch.float32).to(device)
     val_metrics = evaluate(val, *score_split(model, tok, val, args.max_length, args.seed), train_mean)
-    run = {"args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-           "halves": {k: len(v) for k, v in halves.items()}, "train_rows": len(train), "train_mean": train_mean,
-           "device": device, "bf16": use_bf16, "torch": torch.__version__, "transformers": transformers.__version__,
-           "history": history, "val": val_metrics, "minutes": round((time.time() - t0) / 60, 1)}
+    run = {
+        "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "halves": {k: len(v) for k, v in halves.items()},
+        "train_rows": len(train),
+        "train_mean": train_mean,
+        "device": device,
+        "bf16": use_bf16,
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
+        "history": history,
+        "val": val_metrics,
+        "minutes": round((time.time() - t0) / 60, 1),
+    }
     (args.output / "run.json").write_text(json.dumps(run, indent=1), encoding="utf-8")
     (args.output / "halves.json").write_text(json.dumps({"seed": args.seed, **halves}), encoding="utf-8")
     print(json.dumps({"val": val_metrics}, indent=1))

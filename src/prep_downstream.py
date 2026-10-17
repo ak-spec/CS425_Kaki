@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from huggingface_hub import hf_hub_download
+
 from prep import HF_FILE, HF_REPO, collapse_labels, dedup, norm_text, split_dialogues
 
 STRATEGIES = sorted(
@@ -24,11 +25,7 @@ STRATEGIES = sorted(
 
 
 def history(turns):
-    return " | ".join(
-        f"{t['speaker']}: {norm_text(t['content'])}"
-        for t in turns
-        if norm_text(t["content"])
-    )
+    return " | ".join(f"{t['speaker']}: {norm_text(t['content'])}" for t in turns if norm_text(t["content"]))
 
 
 def build_rows(dialogue_id, dialogue, labels):
@@ -67,12 +64,7 @@ def build_rows(dialogue_id, dialogue, labels):
         except (TypeError, ValueError):
             excluded["invalid_feedback"] += 1
             continue
-        if (
-            turn["speaker"] != "seeker"
-            or score not in range(1, 6)
-            or i == 0
-            or turns[i - 1]["speaker"] != "supporter"
-        ):
+        if turn["speaker"] != "seeker" or score not in range(1, 6) or i == 0 or turns[i - 1]["speaker"] != "supporter":
             excluded["unpaired_feedback"] += 1
             continue
         start = i - 1
@@ -89,9 +81,7 @@ def build_rows(dialogue_id, dialogue, labels):
                 response=" ".join(norm_text(t["content"]) for t in turns[start:i]),
                 feedback=score,
                 alignment="preceding_supporter_block_proxy",
-                strategies=[
-                    t.get("annotation", {}).get("strategy") for t in turns[start:i]
-                ],
+                strategies=[t.get("annotation", {}).get("strategy") for t in turns[start:i]],
             )
         )
     return examples, feedback, excluded
@@ -101,9 +91,7 @@ def validate_splits(splits, ids):
     groups = [splits[k] for k in ("train", "val", "test")]
     flat = [i for group in groups for i in group]
     if len(flat) != len(set(flat)) or set(flat) != set(ids):
-        raise ValueError(
-            "Split IDs must cover deduplicated raw dialogues exactly once."
-        )
+        raise ValueError("Split IDs must cover deduplicated raw dialogues exactly once.")
 
 
 def main():
@@ -111,9 +99,7 @@ def main():
     parser.add_argument("--raw", type=Path, default=Path("data/raw"))
     parser.add_argument("--processed", type=Path, default=Path("data/processed"))
     args = parser.parse_args()
-    raw_path = hf_hub_download(
-        HF_REPO, HF_FILE, repo_type="dataset", local_dir=args.raw
-    )
+    raw_path = hf_hub_download(HF_REPO, HF_FILE, repo_type="dataset", local_dir=args.raw)
     raw = json.loads(Path(raw_path).read_text(encoding="utf-8"))
     kept, duplicates = dedup(raw)
     ids = [i for i, _ in kept]
@@ -133,17 +119,13 @@ def main():
     out = args.processed / "downstream"
     out.mkdir(parents=True, exist_ok=True)
     (out / "splits.json").write_text(json.dumps(splits, indent=1), encoding="utf-8")
-    (out / "strategy_labels.json").write_text(
-        json.dumps(STRATEGIES, indent=2), encoding="utf-8"
-    )
+    (out / "strategy_labels.json").write_text(json.dumps(STRATEGIES, indent=2), encoding="utf-8")
     lookup = dict(kept)
     report = {
         "split_source": split_source,
         "raw_dialogues": len(raw),
         "duplicates": duplicates,
-        "raw_sha256": hashlib.sha256(
-            json.dumps(raw, sort_keys=True).encode()
-        ).hexdigest(),
+        "raw_sha256": hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest(),
         "splits": {},
     }
     for name in ("train", "val", "test"):

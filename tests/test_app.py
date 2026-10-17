@@ -2,6 +2,7 @@
 
 Run from the repository root: python -m unittest discover -s tests -v
 """
+
 import json
 import os
 import re
@@ -64,8 +65,9 @@ class FakeKakiTests(unittest.TestCase):
         self.assertTrue(out["bypassed"])
         self.assertEqual(out["guard"]["response_key"], "crisis_sg")
         self.assertEqual(out["reply"], CRISIS)
-        self.assertEqual((out["perceive"], out["strategies"], out["candidates"], out["selected"]),
-                         (None, None, [], None))
+        self.assertEqual(
+            (out["perceive"], out["strategies"], out["candidates"], out["selected"]), (None, None, [], None)
+        )
 
     def test_outputs_are_deterministic(self):
         turns = seeker(ORDINARY) + [{"speaker": "supporter", "text": "That sounds hard."}] + seeker("Friends did fine.")
@@ -88,16 +90,18 @@ class AppTests(unittest.TestCase):
 
     def test_notice_and_configurations(self):
         self.assertFalse(self.at.exception)
-        self.assertTrue(any("not therapy" in w.value and "not a reliable crisis detector" in w.value
-                            for w in self.at.warning))
+        self.assertTrue(
+            any("not therapy" in w.value and "not a reliable crisis detector" in w.value for w in self.at.warning)
+        )
         self.assertEqual(self.at.radio(key="config").options, list(CONFIGS))
         self.assertEqual(self.at.radio(key="config").value, "lookahead")
 
     def test_lookahead_reply_shows_every_stage(self):
         self.send(ORDINARY)
         self.assertEqual([t["speaker"] for t in self.at.session_state.turns], ["seeker", "supporter"])
-        self.assertEqual(self.table_columns(), [["Emotion", "Probability"], ["Problem", "Probability"],
-                                                ["Strategy", "Probability"]])
+        self.assertEqual(
+            self.table_columns(), [["Emotion", "Probability"], ["Problem", "Probability"], ["Strategy", "Probability"]]
+        )
         self.assertEqual(len(self.at.dataframe[2].value), 3)
         self.assertEqual(sum("selected]" in m.value for m in self.at.markdown), 1)
         self.assertTrue(any(re.fullmatch(r"lookahead, \d+\.\d\d s", c.value) for c in self.at.caption))
@@ -138,8 +142,11 @@ class RealModeTests(unittest.TestCase):
             self.assertTrue(all(p.name == "label_maps.json" for p in missing_files(Path(tmp), "lookahead")))
 
     def test_missing_checkpoints_stop_with_a_message(self):
-        with tempfile.TemporaryDirectory() as empty, mock.patch.dict(os.environ, {"KAKI_FAKE": "0"}), \
-                mock.patch.object(sys, "argv", ["app.py", "--checkpoints", empty]):
+        with (
+            tempfile.TemporaryDirectory() as empty,
+            mock.patch.dict(os.environ, {"KAKI_FAKE": "0"}),
+            mock.patch.object(sys, "argv", ["app.py", "--checkpoints", empty]),
+        ):
             at = AppTest.from_file(APP, default_timeout=30).run()
         self.assertFalse(at.exception)
         self.assertIn("--fake", at.error[0].value)

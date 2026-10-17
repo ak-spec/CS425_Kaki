@@ -8,6 +8,7 @@ score: each rater's accuracy against the key. About 50% means the raters could n
     python src/realism_sheet.py build
     python src/realism_sheet.py score --sheets data/human_eval/realism_rater1.csv data/human_eval/realism_rater2.csv
 """
+
 import argparse
 import csv
 import json
@@ -48,8 +49,7 @@ def read_guesses(path: Path) -> dict[str, str]:
     """{item: "real" or "simulated"}; "human" and "ai" are accepted too, in any case."""
     with open(path, encoding="utf-8-sig", newline="") as f:
         rows = [r for r in csv.DictReader(f) if (r.get("item") or "").strip()]
-    guesses = {r["item"].strip(): SYNONYMS.get((r.get("guess") or "").strip().lower(), "")
-               for r in rows}
+    guesses = {r["item"].strip(): SYNONYMS.get((r.get("guess") or "").strip().lower(), "") for r in rows}
     bad = [i for i, g in guesses.items() if g not in ("real", "simulated")]
     if bad:
         raise ValueError(f"{path}: guess must be 'real' or 'simulated' for items {bad}")
@@ -59,8 +59,13 @@ def read_guesses(path: Path) -> dict[str, str]:
 def score(sheets: list[dict], key: dict) -> dict:
     answers = key["answers"]
     per = [mean(s[i] == a for i, a in answers.items()) for s in sheets]
-    return {"raters": len(sheets), "items": len(answers), "accuracy_per_rater": per, "accuracy": mean(per),
-            "simulated_called_real": mean(s[i] == "real" for s in sheets for i, a in answers.items() if a == "simulated")}
+    return {
+        "raters": len(sheets),
+        "items": len(answers),
+        "accuracy_per_rater": per,
+        "accuracy": mean(per),
+        "simulated_called_real": mean(s[i] == "real" for s in sheets for i, a in answers.items() if a == "simulated"),
+    }
 
 
 def main():

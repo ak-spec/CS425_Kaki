@@ -9,6 +9,7 @@ Usage, from the repository root with src on the import path:
     perceiver = Perceiver("checkpoints/perceive")
     perceiver.predict("supporter: Hi, how are you? | seeker: I failed my midterm.")
 """
+
 import json
 from pathlib import Path
 
@@ -25,8 +26,9 @@ class PerceiveModel(nn.Module):
     def __init__(self, name, n_emo, n_prob, dropout, pretrained=True):
         super().__init__()
         # inference loads trained weights from best.pt, so the pretrained ones are not needed
-        self.encoder = (AutoModel.from_pretrained(name) if pretrained
-                        else AutoModel.from_config(AutoConfig.from_pretrained(name)))
+        self.encoder = (
+            AutoModel.from_pretrained(name) if pretrained else AutoModel.from_config(AutoConfig.from_pretrained(name))
+        )
         hidden = self.encoder.config.hidden_size
         self.drop = nn.Dropout(dropout)
         self.emo_head = nn.Linear(hidden, n_emo)
@@ -39,8 +41,9 @@ class PerceiveModel(nn.Module):
 
 
 class Perceiver:
-    def __init__(self, checkpoint=ROOT / "checkpoints/perceive",
-                 label_maps=ROOT / "data/processed/label_maps.json", device=None):
+    def __init__(
+        self, checkpoint=ROOT / "checkpoints/perceive", label_maps=ROOT / "data/processed/label_maps.json", device=None
+    ):
         checkpoint = Path(checkpoint)
         cfg = json.loads((checkpoint / "run.json").read_text(encoding="utf-8"))["config"]
         maps = json.loads(Path(label_maps).read_text(encoding="utf-8"))
@@ -49,8 +52,9 @@ class Perceiver:
         self.max_len = cfg["max_len"]
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"], truncation_side="left")
-        self.model = PerceiveModel(cfg["model_name"], len(self.emotions), len(self.problems), cfg["dropout"],
-                                   pretrained=False)
+        self.model = PerceiveModel(
+            cfg["model_name"], len(self.emotions), len(self.problems), cfg["dropout"], pretrained=False
+        )
         self.model.load_state_dict(torch.load(checkpoint / "best.pt", map_location="cpu"))
         self.model.to(self.device).eval()
 
@@ -61,5 +65,9 @@ class Perceiver:
         emo_logits, prob_logits = self.model(enc["input_ids"], enc["attention_mask"])
         emo = dict(zip(self.emotions, emo_logits.float().softmax(-1)[0].tolist()))
         prob = dict(zip(self.problems, prob_logits.float().softmax(-1)[0].tolist()))
-        return {"emotion": max(emo, key=emo.get), "emotion_probs": emo,
-                "problem": max(prob, key=prob.get), "problem_probs": prob}
+        return {
+            "emotion": max(emo, key=emo.get),
+            "emotion_probs": emo,
+            "problem": max(prob, key=prob.get),
+            "problem_probs": prob,
+        }

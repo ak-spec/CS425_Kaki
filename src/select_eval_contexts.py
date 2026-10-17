@@ -11,6 +11,7 @@ IDs, the seed and the rule only.
 
     python src/select_eval_contexts.py      # writes configs/eval_contexts.json
 """
+
 import argparse
 import collections
 import hashlib
@@ -43,14 +44,23 @@ def history_turns(text: str) -> list[dict]:
 def eligible(row: dict, min_seeker_turns: int = 2, min_seeker_words: int = 20, max_words: int = 250) -> bool:
     turns = history_turns(row["text"])
     seeker = [t["text"] for t in turns if t["speaker"] == "seeker"]
-    return (turns[-1]["speaker"] == "seeker"
-            and len(seeker) >= min_seeker_turns
-            and sum(len(t.split()) for t in seeker) >= min_seeker_words
-            and sum(len(t["text"].split()) for t in turns) <= max_words)
+    return (
+        turns[-1]["speaker"] == "seeker"
+        and len(seeker) >= min_seeker_turns
+        and sum(len(t.split()) for t in seeker) >= min_seeker_words
+        and sum(len(t["text"].split()) for t in turns) <= max_words
+    )
 
 
-def select(rows: list[dict], n: int = 20, seed: int = 42, priority=PRIORITY, min_seeker_turns: int = 2,
-           min_seeker_words: int = 20, max_words: int = 250) -> list[dict]:
+def select(
+    rows: list[dict],
+    n: int = 20,
+    seed: int = 42,
+    priority=PRIORITY,
+    min_seeker_turns: int = 2,
+    min_seeker_words: int = 20,
+    max_words: int = 250,
+) -> list[dict]:
     """n {dialogue_id, utterance_idx} from n distinct dialogues, sorted by dialogue."""
     by_dialogue = collections.defaultdict(list)
     for r in rows:
@@ -71,9 +81,10 @@ def select(rows: list[dict], n: int = 20, seed: int = 42, priority=PRIORITY, min
     chosen += rest[: n - len(chosen)]
     if len(chosen) < n:
         raise ValueError(f"only {len(chosen)} dialogues have an eligible row, {n} needed")
-    return [{"dialogue_id": d,
-             "utterance_idx": rng.choice(sorted(r["utterance_idx"] for r in by_dialogue[d]))}
-            for d in sorted(chosen)]
+    return [
+        {"dialogue_id": d, "utterance_idx": rng.choice(sorted(r["utterance_idx"] for r in by_dialogue[d]))}
+        for d in sorted(chosen)
+    ]
 
 
 def main():
@@ -87,8 +98,7 @@ def main():
     ap.add_argument("--max-words", type=int, default=250)
     args = ap.parse_args()
     rows = read_jsonl(args.processed / "downstream/responses_test.jsonl")
-    contexts = select(rows, args.n, args.seed, PRIORITY, args.min_seeker_turns, args.min_seeker_words,
-                      args.max_words)
+    contexts = select(rows, args.n, args.seed, PRIORITY, args.min_seeker_turns, args.min_seeker_words, args.max_words)
     out = {
         "seed": args.seed,
         "source": "data/processed/downstream/responses_test.jsonl",

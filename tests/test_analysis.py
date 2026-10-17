@@ -2,6 +2,7 @@
 
 Run from the repository root: python -m unittest discover -s tests -v
 """
+
 import sys
 import unittest
 from pathlib import Path
@@ -9,20 +10,43 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import csv
+import json
+import tempfile
+
+from ablations import inputs as ablation_inputs
 from baselines import detokenize
 from benchmark import parameters
 from controllability import agreement, confusion, ends_with_seeker
-from simulate import (CLOSING, OPENING, clean, converse, per_chat, rating, repeats, seeker_messages,
-                      situations, summarise)
-from test_eval import fake_kaki, sheet_inputs, TWO_SEEKER
-import json
-import tempfile
-from ablations import inputs as ablation_inputs
-import csv
-from human_eval_sheet import (CRITERIA, FIELDS, build as build_sheet, judge_agreement, query_outputs, query_rows,
-                              paired_differences, read_sheet, score as score_sheet, spearman)
+from human_eval_sheet import (
+    CRITERIA,
+    FIELDS,
+    judge_agreement,
+    paired_differences,
+    query_outputs,
+    query_rows,
+    read_sheet,
+    spearman,
+)
+from human_eval_sheet import build as build_sheet
+from human_eval_sheet import score as score_sheet
 from judge import parse_scores, pick_contexts, prompt
-from realism_sheet import build as build_realism, read_guesses, real_openers, score as score_realism
+from realism_sheet import build as build_realism
+from realism_sheet import read_guesses, real_openers
+from realism_sheet import score as score_realism
+from simulate import (
+    CLOSING,
+    OPENING,
+    clean,
+    converse,
+    per_chat,
+    rating,
+    repeats,
+    seeker_messages,
+    situations,
+    summarise,
+)
+from test_eval import TWO_SEEKER, fake_kaki, sheet_inputs
 
 SESSION = {"dialogue_id": 7, "situation": "I failed a quiz.", "emotion": "sadness", "problem": "academic pressure"}
 
@@ -37,14 +61,19 @@ class FakeSeeker:
         self.calls.append((len(chats), seed, sample))
         if not sample:
             return ["4" for _ in chats]
-        return [f"Seeker: message {sum(m['role'] == 'assistant' for m in c) + 1} about exams"
-                + (" bye [END]" if sum(m["role"] == "assistant" for m in c) >= 2 else "") for c in chats]
+        return [
+            f"Seeker: message {sum(m['role'] == 'assistant' for m in c) + 1} about exams"
+            + (" bye [END]" if sum(m["role"] == "assistant" for m in c) >= 2 else "")
+            for c in chats
+        ]
 
 
 class BaselineTests(unittest.TestCase):
     def test_detokenize_blenderbot_output(self):
-        self.assertEqual(detokenize("i ' m sorry to hear that . don ' t worry , it ' s ok ! have you tried ?"),
-                         "I'm sorry to hear that. Don't worry, it's ok! Have you tried?")
+        self.assertEqual(
+            detokenize("i ' m sorry to hear that . don ' t worry , it ' s ok ! have you tried ?"),
+            "I'm sorry to hear that. Don't worry, it's ok! Have you tried?",
+        )
         self.assertEqual(detokenize(""), "")
 
 
@@ -87,8 +116,17 @@ class SimulatorTests(unittest.TestCase):
         self.assertIsNone(rating("not sure"))
 
     def test_repetition_counts_reused_trigrams(self):
-        self.assertEqual(repeats(["that sounds really hard for you", "that sounds really hard for you today",
-                                  "what happened at school", "ok"]), [False, True, False, False])
+        self.assertEqual(
+            repeats(
+                [
+                    "that sounds really hard for you",
+                    "that sounds really hard for you today",
+                    "what happened at school",
+                    "ok",
+                ]
+            ),
+            [False, True, False, False],
+        )
 
     def test_conversation_loop_with_stand_ins(self):
         seeker = FakeSeeker()
@@ -97,8 +135,9 @@ class SimulatorTests(unittest.TestCase):
         chats = converse(fake_kaki(), seeker, sessions, openers, "lookahead", max_turns=6, seed=1)
         first, second = chats
         self.assertEqual(first["ended_by"], "seeker")
-        self.assertEqual([t["speaker"] for t in first["turns"]],
-                         ["seeker", "supporter", "seeker", "supporter", "seeker"])
+        self.assertEqual(
+            [t["speaker"] for t in first["turns"]], ["seeker", "supporter", "seeker", "supporter", "seeker"]
+        )
         self.assertEqual(first["turns"][0]["text"], "I failed my quiz")
         self.assertEqual(first["turns"][-1]["text"], "message 3 about exams bye")
         self.assertEqual(len(first["replies"]), 2)
@@ -122,8 +161,9 @@ class SimulatorTests(unittest.TestCase):
         self.assertEqual(per_chat(chats, "seeker_rating"), {7: 4, 8: 4})
 
     def test_opening_message_cannot_end_the_chat(self):
-        chats = converse(fake_kaki(), FakeSeeker(), [SESSION], ["hi, thanks for being here [END]"], "direct",
-                         max_turns=2, seed=1)
+        chats = converse(
+            fake_kaki(), FakeSeeker(), [SESSION], ["hi, thanks for being here [END]"], "direct", max_turns=2, seed=1
+        )
         self.assertEqual(chats[0]["turns"][0]["text"], "hi, thanks for being here")
         self.assertEqual(len(chats[0]["replies"]), 2)
 
@@ -159,16 +199,18 @@ class HumanEvalExtensionTests(unittest.TestCase):
             r.write_text(json.dumps([{"system": "direct", "replies": [{"id": "h1", "reply": "hi"}]}]), encoding="utf-8")
             self.assertEqual(query_rows(q), [{"dialogue_id": "h1", "utterance_idx": 0, "text": "seeker: exams lah"}])
             self.assertEqual(query_outputs(r), {"direct": {("h1", 0): {"reply": "hi"}}})
-            sheet, key = build_sheet(query_rows(q), {"direct": {("h1", 0): {"reply": "hi"}},
-                                                     "planning": {("h1", 0): {"reply": "hello"}}})
+            sheet, key = build_sheet(
+                query_rows(q), {"direct": {("h1", 0): {"reply": "hi"}}, "planning": {("h1", 0): {"reply": "hello"}}}
+            )
             self.assertEqual(sheet[0]["history"], "Seeker: exams lah")
 
 
 class JudgeTests(unittest.TestCase):
     def test_parse_scores(self):
         answer = '{"relevance": 4, "acknowledgement": 3, "helpfulness": "4", "fluency": 5, "safety": 5}'
-        self.assertEqual(parse_scores(answer), {"relevance": 4, "acknowledgement": 3, "helpfulness": 4,
-                                                "fluency": 5, "safety": 5})
+        self.assertEqual(
+            parse_scores(answer), {"relevance": 4, "acknowledgement": 3, "helpfulness": 4, "fluency": 5, "safety": 5}
+        )
         self.assertIsNone(parse_scores('{"relevance": 4}'))
         self.assertIsNone(parse_scores("no idea"))
 
@@ -180,6 +222,7 @@ class JudgeTests(unittest.TestCase):
     def test_contexts_exclude_bypassed_supporter_last_and_human_eval(self):
         def row(after, bypassed):
             return {"after_seeker": after, "bypassed": bypassed}
+
         base = {(1, 1): row(True, False), (2, 1): row(True, True), (3, 1): row(False, False), (4, 1): row(True, False)}
         rows = {s: dict(base) for s in ("direct", "planning", "lookahead", "blenderbot", "zeroshot")}
         self.assertEqual(pick_contexts(rows, exclude={(4, 1)}, n=5, seed=0), [(1, 1)])
@@ -187,8 +230,16 @@ class JudgeTests(unittest.TestCase):
 
 class AblationTests(unittest.TestCase):
     def test_each_variant_changes_one_input(self):
-        rows = [{"dialogue_id": 1, "utterance_idx": 2, "perceived": {"emotion": "fear"}, "emotion": "sadness",
-                 "strategy": "Question", "reference_strategy": "Others"}]
+        rows = [
+            {
+                "dialogue_id": 1,
+                "utterance_idx": 2,
+                "perceived": {"emotion": "fear"},
+                "emotion": "sadness",
+                "strategy": "Question",
+                "reference_strategy": "Others",
+            }
+        ]
         got = ablation_inputs(rows, {(1, 2): "seeker: hi"}, "anxiety")
         self.assertEqual(got["planning"], [("seeker: hi", "fear", "Question")])
         self.assertEqual(got["oracle_strategy"], [("seeker: hi", "fear", "Others")])
@@ -198,8 +249,14 @@ class AblationTests(unittest.TestCase):
 
 class RealismTests(unittest.TestCase):
     def test_build_score_and_openers(self):
-        raw = [{"dialog": [{"speaker": "seeker", "content": "hi"},
-                           {"speaker": "seeker", "content": "I lost my job and I do not know what to do next"}]}]
+        raw = [
+            {
+                "dialog": [
+                    {"speaker": "seeker", "content": "hi"},
+                    {"speaker": "seeker", "content": "I lost my job and I do not know what to do next"},
+                ]
+            }
+        ]
         self.assertEqual(real_openers(raw, [0]), ["I lost my job and I do not know what to do next"])
         sheet, key = build_realism([f"real {i}" for i in range(12)], [f"sim {i}" for i in range(12)], n=3, seed=1)
         self.assertEqual(len(sheet), 6)
@@ -247,8 +304,15 @@ class ScoringTests(unittest.TestCase):
         level = {"direct": 2, "planning": 4, "lookahead": 5}
         system_of = {(c["context"], label): group[0] for c in key["contexts"] for label, group in c["labels"].items()}
         rater = {u: dict.fromkeys(CRITERIA, level[s]) for u, s in system_of.items()}
-        judge_rows = [{"subset": "human_eval", "dialogue_id": c["dialogue_id"], "utterance_idx": c["utterance_idx"],
-                       "scores": {s: dict.fromkeys(CRITERIA, level[s]) for s in level}} for c in key["contexts"]]
+        judge_rows = [
+            {
+                "subset": "human_eval",
+                "dialogue_id": c["dialogue_id"],
+                "utterance_idx": c["utterance_idx"],
+                "scores": {s: dict.fromkeys(CRITERIA, level[s]) for s in level},
+            }
+            for c in key["contexts"]
+        ]
         result = judge_agreement([rater, rater], key, judge_rows)
         self.assertEqual(result["relevance"]["replies"], 6)
         self.assertEqual(result["relevance"]["judge_vs_raters"], 1.0)

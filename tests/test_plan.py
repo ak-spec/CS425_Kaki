@@ -14,9 +14,7 @@ class FixedModel:
         return self
 
     def __call__(self, **batch):
-        return SimpleNamespace(
-            logits=torch.tensor([[8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0]] * 2)
-        )
+        return SimpleNamespace(logits=torch.tensor([[8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0]] * 2))
 
 
 class MetricsTests(unittest.TestCase):

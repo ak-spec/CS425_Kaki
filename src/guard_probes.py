@@ -11,6 +11,7 @@ The probes were written before this script was run and are never used for traini
 
     python src/guard_probes.py      # writes checkpoints/guard/probes.json and prints the tables
 """
+
 import argparse
 import json
 from collections import defaultdict
@@ -24,9 +25,12 @@ METHODS = ("lexicon", "classifier", "guard", "either")
 
 def flags(score: float, matches: list[dict], thresholds: dict) -> dict:
     lexicon = any(not m["negated"] and not m["quoted"] for m in matches)
-    return {"lexicon": lexicon, "classifier": score >= thresholds["model"],
-            "guard": decide(score, matches, thresholds)["bypass_generation"],
-            "either": lexicon or score >= thresholds["model"]}
+    return {
+        "lexicon": lexicon,
+        "classifier": score >= thresholds["model"],
+        "guard": decide(score, matches, thresholds)["bypass_generation"],
+        "either": lexicon or score >= thresholds["model"],
+    }
 
 
 def counts(truth: list[bool], pred: list[bool]) -> dict:
@@ -36,8 +40,15 @@ def counts(truth: list[bool], pred: list[bool]) -> dict:
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return {"tp": tp, "fp": fp, "fn": fn, "tn": len(truth) - tp - fp - fn,
-            "precision": round(precision, 3), "recall": round(recall, 3), "f1": round(f1, 3)}
+    return {
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": len(truth) - tp - fp - fn,
+        "precision": round(precision, 3),
+        "recall": round(recall, 3),
+        "f1": round(f1, 3),
+    }
 
 
 def main():
@@ -50,26 +61,44 @@ def main():
     scores = guard.score([p["text"] for p in probes])
     rows = []
     for p, s in zip(probes, scores):
-        rows.append({"id": p["id"], "group": p["group"], "escalate": p["escalate"], "score": round(s, 3),
-                     **flags(s, match_lexicon(p["text"]), guard.thresholds)})
+        rows.append(
+            {
+                "id": p["id"],
+                "group": p["group"],
+                "escalate": p["escalate"],
+                "score": round(s, 3),
+                **flags(s, match_lexicon(p["text"]), guard.thresholds),
+            }
+        )
     truth = [r["escalate"] for r in rows]
-    result = {"thresholds": guard.thresholds, "probes": len(rows),
-              "overall": {m: counts(truth, [r[m] for r in rows]) for m in METHODS}, "by_group": {}, "rows": rows}
+    result = {
+        "thresholds": guard.thresholds,
+        "probes": len(rows),
+        "overall": {m: counts(truth, [r[m] for r in rows]) for m in METHODS},
+        "by_group": {},
+        "rows": rows,
+    }
     groups = defaultdict(list)
     for r in rows:
         groups[r["group"]].append(r)
     for g, rs in groups.items():
-        result["by_group"][g] = {"n": len(rs), "escalate": rs[0]["escalate"],
-                                 **{m: sum(r[m] for r in rs) for m in METHODS}}
+        result["by_group"][g] = {
+            "n": len(rs),
+            "escalate": rs[0]["escalate"],
+            **{m: sum(r[m] for r in rs) for m in METHODS},
+        }
     (args.checkpoint / "probes.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     print("| Detector | Precision | Recall | F1 | False alarms | Missed |\n|---|---|---|---|---|---|")
     for m in METHODS:
         c = result["overall"][m]
         print(f"| {m} | {c['precision']:.2f} | {c['recall']:.2f} | {c['f1']:.2f} | {c['fp']} | {c['fn']} |")
-    print("\n| Group | Should escalate | Probes | Lexicon | Classifier | Guard | Either |\n|---|---|---|---|---|---|---|")
+    print(
+        "\n| Group | Should escalate | Probes | Lexicon | Classifier | Guard | Either |\n|---|---|---|---|---|---|---|"
+    )
     for g, c in result["by_group"].items():
-        print(f"| {g} | {'yes' if c['escalate'] else 'no'} | {c['n']} | "
-              + " | ".join(str(c[m]) for m in METHODS) + " |")
+        print(
+            f"| {g} | {'yes' if c['escalate'] else 'no'} | {c['n']} | " + " | ".join(str(c[m]) for m in METHODS) + " |"
+        )
 
 
 if __name__ == "__main__":

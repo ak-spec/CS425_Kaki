@@ -14,6 +14,7 @@ turns. Rows already in an output file are skipped, so an interrupted run resumes
 Needs the trained checkpoints (guard, perceive, plan, speak-history, speak-conditioned) and, for the full
 test split, a GPU. --critic adds a Critic checkpoint for look-ahead selection.
 """
+
 import argparse
 import json
 import time
@@ -36,8 +37,10 @@ def load_rows(path: Path, contexts: Path | None = None, limit: int | None = None
     rows = read_jsonl(path)
     if contexts is not None:
         by_key = {(r["dialogue_id"], r["utterance_idx"]): r for r in rows}
-        wanted = [(c["dialogue_id"], c["utterance_idx"])
-                  for c in json.loads(Path(contexts).read_text(encoding="utf-8"))["contexts"]]
+        wanted = [
+            (c["dialogue_id"], c["utterance_idx"])
+            for c in json.loads(Path(contexts).read_text(encoding="utf-8"))["contexts"]
+        ]
         missing = [k for k in wanted if k not in by_key]
         if missing:
             raise ValueError(f"contexts not found in {path}: {missing}")
@@ -51,11 +54,13 @@ def row_turns(row: dict, dialogues: list[dict] | None = None) -> list[dict]:
         turns = history_turns(row["text"])
     else:
         dialog = dialogues[row["dialogue_id"]]["dialog"][: row["utterance_idx"]]
-        turns = [{"speaker": t["speaker"], "text": " ".join(t["content"].split())}
-                 for t in dialog if t["content"].strip()]
+        turns = [
+            {"speaker": t["speaker"], "text": " ".join(t["content"].split())} for t in dialog if t["content"].strip()
+        ]
     if render(turns) != row["text"]:
-        raise ValueError(f"turns do not match the history of dialogue {row['dialogue_id']}, "
-                         f"utterance {row['utterance_idx']}")
+        raise ValueError(
+            f"turns do not match the history of dialogue {row['dialogue_id']}, utterance {row['utterance_idx']}"
+        )
     return turns
 
 
@@ -64,14 +69,21 @@ def record(row: dict, turns: list[dict], out: dict) -> dict:
     chosen = out["candidates"][out["selected"]] if out["candidates"] else None
     perceived = out["perceive"]
     return {
-        "dialogue_id": row["dialogue_id"], "utterance_idx": row["utterance_idx"], "config": out["config"],
-        "problem": row["problem"], "emotion": row["emotion"],
+        "dialogue_id": row["dialogue_id"],
+        "utterance_idx": row["utterance_idx"],
+        "config": out["config"],
+        "problem": row["problem"],
+        "emotion": row["emotion"],
         "after_seeker": turns[-1]["speaker"] == "seeker",
-        "reference": row["response"], "reference_strategy": row["strategy"],
-        "reply": out["reply"], "bypassed": out["bypassed"],
+        "reference": row["response"],
+        "reference_strategy": row["strategy"],
+        "reply": out["reply"],
+        "bypassed": out["bypassed"],
         "strategy": chosen["strategy"] if chosen else None,
         "perceived": {"emotion": perceived["emotion"], "problem": perceived["problem"]} if perceived else None,
-        "planner": out["strategies"], "candidates": out["candidates"], "selected": out["selected"],
+        "planner": out["strategies"],
+        "candidates": out["candidates"],
+        "selected": out["selected"],
     }
 
 
@@ -85,8 +97,9 @@ def done_keys(path: Path) -> set:
     return {(r["dialogue_id"], r["utterance_idx"]) for r in read_jsonl(path)}
 
 
-def generate(kaki, rows: list[dict], configs, output: Path, dialogues=None, overwrite=False,
-             log_every: int = 50) -> dict:
+def generate(
+    kaki, rows: list[dict], configs, output: Path, dialogues=None, overwrite=False, log_every: int = 50
+) -> dict:
     """Append one line per (row, config) to output/{config}.jsonl; returns the number written per config."""
     private_dir(output)
     paths = {c: output / f"{c}.jsonl" for c in configs}
@@ -109,8 +122,12 @@ def generate(kaki, rows: list[dict], configs, output: Path, dialogues=None, over
                 files[c].flush()
                 written[c] += 1
             if i % log_every == 0 or i == len(rows):
-                print(json.dumps({"rows": i, "of": len(rows), "written": written,
-                                  "minutes": round((time.time() - t0) / 60, 1)}), flush=True)
+                print(
+                    json.dumps(
+                        {"rows": i, "of": len(rows), "written": written, "minutes": round((time.time() - t0) / 60, 1)}
+                    ),
+                    flush=True,
+                )
     finally:
         for f in files.values():
             f.close()
@@ -120,13 +137,20 @@ def generate(kaki, rows: list[dict], configs, output: Path, dialogues=None, over
 def main():
     ap = argparse.ArgumentParser(description="Generate replies for each configuration on ESConv test rows.")
     ap.add_argument("--data", type=Path, default=ROOT / "data/processed/downstream/responses_test.jsonl")
-    ap.add_argument("--raw", type=Path, default=ROOT / "data/raw/ESConv.json",
-                    help="raw ESConv for exact turns; the history string is split if missing")
+    ap.add_argument(
+        "--raw",
+        type=Path,
+        default=ROOT / "data/raw/ESConv.json",
+        help="raw ESConv for exact turns; the history string is split if missing",
+    )
     ap.add_argument("--contexts", type=Path, help="only these rows, e.g. configs/eval_contexts.json")
     ap.add_argument("--configs", nargs="+", choices=CONFIGS, default=list(CONFIGS))
     ap.add_argument("--checkpoints", type=Path, default=ROOT / "checkpoints")
-    ap.add_argument("--critic", type=Path, help="Critic checkpoint for look-ahead; without it look-ahead "
-                                                  "ranks candidates by planner probability")
+    ap.add_argument(
+        "--critic",
+        type=Path,
+        help="Critic checkpoint for look-ahead; without it look-ahead ranks candidates by planner probability",
+    )
     ap.add_argument("--critic-weight", type=float, default=1.0)
     ap.add_argument("--output", type=Path, default=ROOT / "data/outputs")
     ap.add_argument("--limit", type=int, help="first N rows only, for quick checks")
@@ -137,12 +161,17 @@ def main():
     critic = None
     if args.critic:
         from critic import Critic
+
         critic = Critic(args.critic)
     kaki = Kaki.load(args.checkpoints, configs=args.configs, critic=critic, critic_weight=args.critic_weight)
     written = generate(kaki, rows, args.configs, args.output, dialogues, args.overwrite)
-    run = {"args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-           "rows": len(rows), "written": written, "turns_from": "raw" if dialogues else "history string",
-           "skipped_no_seeker_turn": sum(not has_seeker(row_turns(r, dialogues)) for r in rows)}
+    run = {
+        "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "rows": len(rows),
+        "written": written,
+        "turns_from": "raw" if dialogues else "history string",
+        "skipped_no_seeker_turn": sum(not has_seeker(row_turns(r, dialogues)) for r in rows),
+    }
     (args.output / "run.json").write_text(json.dumps(run, indent=1), encoding="utf-8")
 
 

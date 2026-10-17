@@ -14,6 +14,7 @@ is not evidence; docs/results.md reads it together with the reference metrics.
     python src/compare_configs.py                       # after src/generate_outputs.py
     python src/compare_configs.py --subset all --critic checkpoints/eval-critic-contrast
 """
+
 import argparse
 import itertools
 import json
@@ -54,13 +55,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outputs", type=Path, default=ROOT / "data/outputs")
     ap.add_argument("--subset", choices=["all", "after_seeker"], default="after_seeker")
-    ap.add_argument("--systems", nargs="+", choices=SYSTEMS, default=list(SYSTEMS),
-                    help="systems to compare; those without an output file are skipped")
+    ap.add_argument(
+        "--systems",
+        nargs="+",
+        choices=SYSTEMS,
+        default=list(SYSTEMS),
+        help="systems to compare; those without an output file are skipped",
+    )
     ap.add_argument("--bertscore-model", default="roberta-large")
     ap.add_argument("--bertscore-layer", type=int, default=17)
     ap.add_argument("--critic", type=Path, help="held-out Critic checkpoint, e.g. checkpoints/eval-critic-contrast")
-    ap.add_argument("--data", type=Path, default=ROOT / "data/processed/downstream/responses_test.jsonl",
-                    help="test rows, for the histories the Critic reads")
+    ap.add_argument(
+        "--data",
+        type=Path,
+        default=ROOT / "data/processed/downstream/responses_test.jsonl",
+        help="test rows, for the histories the Critic reads",
+    )
     args = ap.parse_args()
 
     rows = paired_rows(args.outputs, args.subset, args.systems)
@@ -72,23 +82,34 @@ def main():
     per_row = {}
     for c in systems:
         replies = [r["reply"] for r in rows[c]]
-        per_row[c] = {"bertscore_f1": [100 * x for x in score(replies, references)],
-                      "rouge_l": [100 * rouge.score(ref, rep)["rougeL"].fmeasure for ref, rep in zip(references, replies)]}
+        per_row[c] = {
+            "bertscore_f1": [100 * x for x in score(replies, references)],
+            "rouge_l": [100 * rouge.score(ref, rep)["rougeL"].fmeasure for ref, rep in zip(references, replies)],
+        }
     if args.critic:
         from critic import Critic, predict_ratings
+
         critic = Critic(args.critic)
         text = {(r["dialogue_id"], r["utterance_idx"]): r["text"] for r in read_jsonl(args.data)}
         histories = [text[(r["dialogue_id"], r["utterance_idx"])] for r in first]
         for c in systems:
-            per_row[c]["critic_rating"] = predict_ratings(critic.model, critic.tokenizer, histories,
-                                                          [r["reply"] for r in rows[c]], critic.max_len)
-        per_row["reference"] = {"critic_rating": predict_ratings(critic.model, critic.tokenizer, histories,
-                                                                 references, critic.max_len)}
-    result = {"subset": args.subset, "histories": len(references), "bertscore": bertscore_hash,
-              "critic": str(args.critic) if args.critic else None,
-              "means": {c: {m: round(float(np.mean(v)), 3) for m, v in per_row[c].items()} for c in per_row},
-              "differences": {f"{a} - {b}": {m: bootstrap_diff(per_row[a][m], per_row[b][m]) for m in per_row[a]}
-                              for a, b in itertools.combinations(systems, 2)}}
+            per_row[c]["critic_rating"] = predict_ratings(
+                critic.model, critic.tokenizer, histories, [r["reply"] for r in rows[c]], critic.max_len
+            )
+        per_row["reference"] = {
+            "critic_rating": predict_ratings(critic.model, critic.tokenizer, histories, references, critic.max_len)
+        }
+    result = {
+        "subset": args.subset,
+        "histories": len(references),
+        "bertscore": bertscore_hash,
+        "critic": str(args.critic) if args.critic else None,
+        "means": {c: {m: round(float(np.mean(v)), 3) for m, v in per_row[c].items()} for c in per_row},
+        "differences": {
+            f"{a} - {b}": {m: bootstrap_diff(per_row[a][m], per_row[b][m]) for m in per_row[a]}
+            for a, b in itertools.combinations(systems, 2)
+        },
+    }
     out = args.outputs / f"paired_{args.subset}.json"
     out.write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps(result, indent=1))

@@ -1,15 +1,15 @@
 """Train either Speak LoRA adapter on the same response examples."""
 
 import argparse
-from functools import partial
 import hashlib
 import json
-from pathlib import Path
 import random
+from functools import partial
+from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
 from peft import LoraConfig, TaskType, get_peft_model
+from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from speak import BASE_MODEL, collate_examples, training_example
@@ -22,12 +22,7 @@ def read_examples(path, tokenizer, args):
         rows = rows[:2]
     if not rows:
         raise ValueError(f"Empty dataset: {path}")
-    return [
-        training_example(
-            tokenizer, row, args.mode, args.max_length, args.max_reply_tokens
-        )
-        for row in rows
-    ]
+    return [training_example(tokenizer, row, args.mode, args.max_length, args.max_reply_tokens) for row in rows]
 
 
 @torch.inference_mode()
@@ -89,18 +84,14 @@ def main():
     collate = partial(collate_examples, pad_token_id=tokenizer.pad_token_id)
     loaders = {}
     for split in ("train", "val"):
-        examples = read_examples(
-            args.data / f"responses_{split}.jsonl", tokenizer, args
-        )
+        examples = read_examples(args.data / f"responses_{split}.jsonl", tokenizer, args)
         loaders[split] = DataLoader(
             examples,
             batch_size=args.batch_size,
             shuffle=split == "train",
             collate_fn=collate,
         )
-    optimizer = torch.optim.AdamW(
-        (p for p in model.parameters() if p.requires_grad), lr=args.lr
-    )
+    optimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.lr)
     best, records = float("inf"), []
     args.output.mkdir(parents=True, exist_ok=True)
     for epoch in range(1 if args.smoke else args.epochs):
@@ -124,17 +115,11 @@ def main():
     config["base_model"] = args.model
     config["device"] = device
     config["data_sha256"] = {
-        split: hashlib.sha256(
-            (args.data / f"responses_{split}.jsonl").read_bytes()
-        ).hexdigest()
+        split: hashlib.sha256((args.data / f"responses_{split}.jsonl").read_bytes()).hexdigest()
         for split in ("train", "val")
     }
-    (args.output / "speak_config.json").write_text(
-        json.dumps(config, indent=2), encoding="utf-8"
-    )
-    (args.output / "training_metrics.json").write_text(
-        json.dumps(records, indent=2), encoding="utf-8"
-    )
+    (args.output / "speak_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+    (args.output / "training_metrics.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

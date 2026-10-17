@@ -21,25 +21,18 @@ class Planner:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         self.tokenizer.truncation_side = "left"
-        self.model = (
-            AutoModelForSequenceClassification.from_pretrained(checkpoint)
-            .to(self.device)
-            .eval()
-        )
+        self.model = AutoModelForSequenceClassification.from_pretrained(checkpoint).to(self.device).eval()
 
     @torch.inference_mode()
     def predict(self, text):
         """Return the top three names and probabilities from the full 8-class softmax."""
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Conversation history must be nonempty text.")
-        tokens = self.tokenizer(
-            text, truncation=True, max_length=512, return_tensors="pt"
-        ).to(self.device)
+        tokens = self.tokenizer(text, truncation=True, max_length=512, return_tensors="pt").to(self.device)
         probs = self.model(**tokens).logits.softmax(-1)[0]
         values, indices = probs.topk(3)
         return [
-            {"strategy": self.model.config.id2label[int(i)], "probability": float(p)}
-            for p, i in zip(values, indices)
+            {"strategy": self.model.config.id2label[int(i)], "probability": float(p)} for p, i in zip(values, indices)
         ]
 
 
@@ -75,9 +68,7 @@ def evaluate(model, batches, device, labels):
         target = batch["labels"]
         truth.extend(target.cpu().tolist())
         pred.extend(logits.argmax(-1).cpu().tolist())
-        covered.extend(
-            (logits.topk(3).indices == target[:, None]).any(-1).cpu().tolist()
-        )
+        covered.extend((logits.topk(3).indices == target[:, None]).any(-1).cpu().tolist())
     return dict(
         accuracy=accuracy_score(truth, pred),
         macro_f1=f1_score(
@@ -157,9 +148,7 @@ def main():
         print(json.dumps(metrics, indent=2))
         return
     if (args.output / "config.json").exists():
-        raise ValueError(
-            "Output already contains a model. Choose a new output to preserve it."
-        )
+        raise ValueError("Output already contains a model. Choose a new output to preserve it.")
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     tokenizer.truncation_side = "left"
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -187,9 +176,7 @@ def main():
     weights = None
     if args.class_weight_power:
         with (args.data / "responses_train.jsonl").open(encoding="utf-8") as f:
-            counts = np.bincount(
-                [json.loads(line)["label"] for line in f], minlength=len(labels)
-            ).clip(min=1)
+            counts = np.bincount([json.loads(line)["label"] for line in f], minlength=len(labels)).clip(min=1)
         weights = torch.tensor(
             (counts.sum() / (len(labels) * counts)) ** args.class_weight_power,
             dtype=torch.float,
@@ -213,9 +200,7 @@ def main():
         metrics = evaluate(model, val, device, labels)
         records.append({"epoch": epoch + 1, **metrics})
         print(
-            json.dumps(
-                {"epoch": epoch + 1, "validation_macro_f1": metrics["macro_f1"]}
-            ),
+            json.dumps({"epoch": epoch + 1, "validation_macro_f1": metrics["macro_f1"]}),
             flush=True,
         )
         if metrics["macro_f1"] > best:
@@ -225,10 +210,7 @@ def main():
     (args.output / "run.json").write_text(
         json.dumps(
             dict(
-                config={
-                    k: str(v) if isinstance(v, Path) else v
-                    for k, v in vars(args).items()
-                },
+                config={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                 device=device,
                 validation=records,
             ),

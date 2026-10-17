@@ -12,6 +12,7 @@ ending with a seeker message, with paired bootstrap intervals against the planni
 
     python src/ablations.py      # data/outputs/ablations.json
 """
+
 import argparse
 import json
 from collections import Counter
@@ -51,6 +52,7 @@ def main():
     text = {(r["dialogue_id"], r["utterance_idx"]): r["text"] for r in read_jsonl(args.data / "responses_test.jsonl")}
     constant = Counter(r["emotion"] for r in read_jsonl(args.data / "responses_train.jsonl")).most_common(1)[0][0]
     from speak import Speaker
+
     speaker = Speaker(args.checkpoints / "speak-conditioned")
     replies = {}
     for v, triples in inputs(rows, text, constant).items():
@@ -63,31 +65,52 @@ def main():
     refs = [rows[i]["reference"] for i in keep]
     score, bertscore_hash = bert_scorer("roberta-large", 17)
     from rouge_score import rouge_scorer
+
     rouge = rouge_scorer.RougeScorer(["rougeL"])
     per = {}
-    result = {"histories": len(keep), "constant_emotion": constant, "bertscore": bertscore_hash,
-              "strategy_changed_by_oracle": round(mean(rows[i]["strategy"] != rows[i]["reference_strategy"]
-                                                       for i in keep), 3),
-              "emotion_changed_by_oracle": round(mean(rows[i]["perceived"]["emotion"] != rows[i]["emotion"]
-                                                      for i in keep), 3),
-              "variants": {}, "against_planning": {}}
+    result = {
+        "histories": len(keep),
+        "constant_emotion": constant,
+        "bertscore": bertscore_hash,
+        "strategy_changed_by_oracle": round(
+            mean(rows[i]["strategy"] != rows[i]["reference_strategy"] for i in keep), 3
+        ),
+        "emotion_changed_by_oracle": round(
+            mean(rows[i]["perceived"]["emotion"] != rows[i]["emotion"] for i in keep), 3
+        ),
+        "variants": {},
+        "against_planning": {},
+    }
     for v in VARIANTS:
         out = [replies[v][i] for i in keep]
-        per[v] = {"bertscore_f1": [100 * x for x in score(out, refs)],
-                  "rouge_l": [100 * rouge.score(ref, o)["rougeL"].fmeasure for ref, o in zip(refs, out)]}
-        result["variants"][v] = {"bleu2": round(bleu(out, refs, 2)[0], 2),
-                                 "rouge_l": round(mean(per[v]["rouge_l"]), 2),
-                                 "bertscore_f1": round(mean(per[v]["bertscore_f1"]), 2),
-                                 "distinct2": round(100 * distinct(out, 2), 2),
-                                 "length": round(mean(len(words(o)) for o in out), 1)}
+        per[v] = {
+            "bertscore_f1": [100 * x for x in score(out, refs)],
+            "rouge_l": [100 * rouge.score(ref, o)["rougeL"].fmeasure for ref, o in zip(refs, out)],
+        }
+        result["variants"][v] = {
+            "bleu2": round(bleu(out, refs, 2)[0], 2),
+            "rouge_l": round(mean(per[v]["rouge_l"]), 2),
+            "bertscore_f1": round(mean(per[v]["bertscore_f1"]), 2),
+            "distinct2": round(100 * distinct(out, 2), 2),
+            "length": round(mean(len(words(o)) for o in out), 1),
+        }
         if v != "planning":
             result["against_planning"][v] = {m: bootstrap_diff(per[v][m], per["planning"][m]) for m in per[v]}
     folder = private_dir(args.outputs)
     (folder / "ablations.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     with open(folder / "ablation_replies.jsonl", "w", encoding="utf-8") as f:
         for i, r in enumerate(rows):
-            f.write(json.dumps({"dialogue_id": r["dialogue_id"], "utterance_idx": r["utterance_idx"],
-                                **{v: replies[v][i] for v in VARIANTS}}, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "dialogue_id": r["dialogue_id"],
+                        "utterance_idx": r["utterance_idx"],
+                        **{v: replies[v][i] for v in VARIANTS},
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
     print(json.dumps(result, indent=1))
 
 

@@ -2,6 +2,7 @@
 
 Run from the repository root: python -m unittest discover -s tests -v
 """
+
 import sys
 import unittest
 from pathlib import Path
@@ -9,9 +10,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pipeline import Kaki, render
 
-STRATEGIES = [{"strategy": "Question", "probability": 0.5},
-              {"strategy": "Reflection of feelings", "probability": 0.3},
-              {"strategy": "Providing Suggestions", "probability": 0.1}]
+STRATEGIES = [
+    {"strategy": "Question", "probability": 0.5},
+    {"strategy": "Reflection of feelings", "probability": 0.3},
+    {"strategy": "Providing Suggestions", "probability": 0.1},
+]
 
 
 class Calls:
@@ -58,15 +61,26 @@ class FakeSpeaker:
         return f"{strategy or 'plain'} reply ({emotion})"
 
     def generate_candidates(self, history, emotion, strategies):
-        return [{"strategy": s["strategy"], "planner_probability": s["probability"],
-                 "response": self.generate(history, emotion, s["strategy"])} for s in strategies]
+        return [
+            {
+                "strategy": s["strategy"],
+                "planner_probability": s["probability"],
+                "response": self.generate(history, emotion, s["strategy"]),
+            }
+            for s in strategies
+        ]
 
 
 def kaki(bypass=False, critic=None, weight=1.0):
     calls = Calls()
-    bot = Kaki(FakeGuard(calls, bypass), FakePerceiver(calls), FakePlanner(calls),
-               {"history": FakeSpeaker(calls, "history"), "conditioned": FakeSpeaker(calls, "conditioned")},
-               critic, weight)
+    bot = Kaki(
+        FakeGuard(calls, bypass),
+        FakePerceiver(calls),
+        FakePlanner(calls),
+        {"history": FakeSpeaker(calls, "history"), "conditioned": FakeSpeaker(calls, "conditioned")},
+        critic,
+        weight,
+    )
     return bot, calls
 
 
@@ -111,8 +125,11 @@ class PipelineTests(unittest.TestCase):
             kaki()[0].respond(TURNS, "best")
 
     def test_render_matches_training_format(self):
-        turns = [{"speaker": "seeker", "text": " hi  there "}, {"speaker": "supporter", "text": ""},
-                 {"speaker": "supporter", "text": "How are you?"}]
+        turns = [
+            {"speaker": "seeker", "text": " hi  there "},
+            {"speaker": "supporter", "text": ""},
+            {"speaker": "supporter", "text": "How are you?"},
+        ]
         self.assertEqual(render(turns), "seeker: hi there | supporter: How are you?")
 
 

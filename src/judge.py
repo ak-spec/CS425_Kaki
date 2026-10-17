@@ -13,6 +13,7 @@ measure agreement with the raters once their ratings are in.
 
     python src/judge.py      # data/outputs/judge.json and judge_rows.jsonl
 """
+
 import argparse
 import itertools
 import json
@@ -43,10 +44,15 @@ safety: 1 harmful (encourages risky behaviour, unsafe or medical advice, blames 
 
 
 def prompt(history: str, reply: str) -> list[dict]:
-    return [{"role": "system", "content": INSTRUCTIONS},
-            {"role": "user", "content": f"Conversation so far:\n{show_history(history)}\n\n"
-                                        f"Supporter's next message:\n{reply}\n\n{RUBRIC}\n\n"
-                                        "Return JSON with the keys " + ", ".join(CRITERIA) + "."}]
+    return [
+        {"role": "system", "content": INSTRUCTIONS},
+        {
+            "role": "user",
+            "content": f"Conversation so far:\n{show_history(history)}\n\n"
+            f"Supporter's next message:\n{reply}\n\n{RUBRIC}\n\n"
+            "Return JSON with the keys " + ", ".join(CRITERIA) + ".",
+        },
+    ]
 
 
 def parse_scores(answer: str):
@@ -63,8 +69,11 @@ def parse_scores(answer: str):
 def pick_contexts(rows: dict, exclude: set, n: int, seed: int) -> list:
     """Keys of histories every system answered, ending with a seeker message and not bypassed."""
     first = rows[SYSTEMS[0]]
-    keys = sorted(k for k in set.intersection(*(set(r) for r in rows.values()))
-                  if first[k]["after_seeker"] and not first[k]["bypassed"] and k not in exclude)
+    keys = sorted(
+        k
+        for k in set.intersection(*(set(r) for r in rows.values()))
+        if first[k]["after_seeker"] and not first[k]["bypassed"] and k not in exclude
+    )
     return sorted(random.Random(seed).sample(keys, min(n, len(keys))))
 
 
@@ -78,11 +87,14 @@ def main():
     ap.add_argument("--judge", default=JUDGE_MODEL)
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
-    rows = {s: {(r["dialogue_id"], r["utterance_idx"]): r for r in read_jsonl(args.outputs / f"{s}.jsonl")}
-            for s in SYSTEMS}
+    rows = {
+        s: {(r["dialogue_id"], r["utterance_idx"]): r for r in read_jsonl(args.outputs / f"{s}.jsonl")} for s in SYSTEMS
+    }
     text = {(r["dialogue_id"], r["utterance_idx"]): r["text"] for r in read_jsonl(args.data)}
-    human = {(c["dialogue_id"], c["utterance_idx"])
-             for c in json.loads(args.contexts.read_text(encoding="utf-8"))["contexts"]}
+    human = {
+        (c["dialogue_id"], c["utterance_idx"])
+        for c in json.loads(args.contexts.read_text(encoding="utf-8"))["contexts"]
+    }
     subsets = {"sample": pick_contexts(rows, human, args.n, args.seed), "human_eval": sorted(human)}
 
     jobs = {}  # (key, reply text) -> prompt; identical replies are judged once
@@ -91,20 +103,30 @@ def main():
             for reply in {rows[s][k]["reply"] for s in SYSTEMS} | {rows[SYSTEMS[0]][k]["reference"]}:
                 jobs[(k, reply)] = prompt(text[k], reply)
     from simulate import Seeker as ChatModel  # the same batched chat wrapper the simulator uses
+
     model = ChatModel(args.judge, batch_size=args.batch_size)
     order = list(jobs)
     answers = model([jobs[j] for j in order], seed=0, sample=False, max_new_tokens=80)
     scored = {j: parse_scores(a) for j, a in zip(order, answers)}
 
     out = private_dir(args.outputs)
-    result = {"judge": args.judge, "n": len(subsets["sample"]), "seed": args.seed,
-              "unparsed": sum(v is None for v in scored.values()), "judged": len(scored)}
+    result = {
+        "judge": args.judge,
+        "n": len(subsets["sample"]),
+        "seed": args.seed,
+        "unparsed": sum(v is None for v in scored.values()),
+        "judged": len(scored),
+    }
     per = {}
     with open(out / "judge_rows.jsonl", "w", encoding="utf-8") as f:
         for subset, keys in subsets.items():
             for k in keys:
-                entry = {"subset": subset, "dialogue_id": k[0], "utterance_idx": k[1],
-                         "scores": {s: scored[(k, rows[s][k]["reply"])] for s in SYSTEMS}}
+                entry = {
+                    "subset": subset,
+                    "dialogue_id": k[0],
+                    "utterance_idx": k[1],
+                    "scores": {s: scored[(k, rows[s][k]["reply"])] for s in SYSTEMS},
+                }
                 entry["scores"]["reference"] = scored[(k, rows[SYSTEMS[0]][k]["reference"])]
                 f.write(json.dumps(entry) + "\n")
                 if subset == "sample":
@@ -112,15 +134,27 @@ def main():
     names = [*SYSTEMS, "reference"]
     usable = [k for k in per if all(per[k][s] for s in names)]
     result["contexts_scored"] = len(usable)
-    result["means"] = {s: {**{c: round(mean(per[k][s][c] for k in usable), 3) for c in CRITERIA},
-                           "overall": round(mean(mean(per[k][s].values()) for k in usable), 3)} for s in names}
+    result["means"] = {
+        s: {
+            **{c: round(mean(per[k][s][c] for k in usable), 3) for c in CRITERIA},
+            "overall": round(mean(mean(per[k][s].values()) for k in usable), 3),
+        }
+        for s in names
+    }
     overall = {s: [mean(per[k][s].values()) for k in usable] for s in names}
-    result["differences"] = {f"{a} - {b}": bootstrap_diff(overall[a], overall[b])
-                             for a, b in itertools.combinations(names, 2)}
+    result["differences"] = {
+        f"{a} - {b}": bootstrap_diff(overall[a], overall[b]) for a, b in itertools.combinations(names, 2)
+    }
     (out / "judge.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "differences"}, indent=1))
-    for pair in ("direct - planning", "direct - lookahead", "planning - lookahead", "lookahead - blenderbot",
-                 "direct - blenderbot", "lookahead - reference"):
+    for pair in (
+        "direct - planning",
+        "direct - lookahead",
+        "planning - lookahead",
+        "lookahead - blenderbot",
+        "direct - blenderbot",
+        "lookahead - reference",
+    ):
         print(pair, result["differences"][pair])
 
 

@@ -55,12 +55,8 @@ class SpeakTests(unittest.TestCase):
         self.assertTrue((batch["attention_mask"][1, 2:] == 0).all())
 
     def test_history_baseline_ignores_reference_conditions(self):
-        a = prompt_ids(
-            self.tokenizer, "seeker: hello", "history", "sadness", "Question"
-        )
-        b = prompt_ids(
-            self.tokenizer, "seeker: hello", "history", "anger", "Information"
-        )
+        a = prompt_ids(self.tokenizer, "seeker: hello", "history", "sadness", "Question")
+        b = prompt_ids(self.tokenizer, "seeker: hello", "history", "anger", "Information")
         self.assertEqual(a, b)
 
     def test_candidate_order_probabilities_and_validation(self):
@@ -72,9 +68,7 @@ class SpeakTests(unittest.TestCase):
             for name, p in [("Question", 0.4), ("Information", 0.3), ("Others", 0.1)]
         ]
         replies = speaker.generate_candidates("history", "sadness", strategies)
-        self.assertEqual(
-            [r["strategy"] for r in replies], [s["strategy"] for s in strategies]
-        )
+        self.assertEqual([r["strategy"] for r in replies], [s["strategy"] for s in strategies])
         self.assertEqual([r["planner_probability"] for r in replies], [0.4, 0.3, 0.1])
         with self.assertRaises(ValueError):
             speaker.generate_candidates("history", "sadness", [strategies[0]] * 3)

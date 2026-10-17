@@ -10,6 +10,7 @@ BlenderBot-small's (src/baselines.py reports that one with its own tokenizer).
 
     python src/perplexity.py      # data/outputs/perplexity.json
 """
+
 import argparse
 import json
 import math
@@ -36,13 +37,17 @@ def main():
     args = ap.parse_args()
     rows = read_jsonl(args.data)[: args.limit]
     result = {"rows": len(rows)}
-    for name, checkpoint in (("zeroshot", None), ("direct", args.checkpoints / "speak-history"),
-                             ("conditioned", args.checkpoints / "speak-conditioned")):
+    for name, checkpoint in (
+        ("zeroshot", None),
+        ("direct", args.checkpoints / "speak-history"),
+        ("conditioned", args.checkpoints / "speak-conditioned"),
+    ):
         speaker = Speaker(checkpoint)
         cfg, tok = speaker.config, speaker.tokenizer
         examples = [training_example(tok, r, cfg["mode"], cfg["max_length"], cfg["max_reply_tokens"]) for r in rows]
-        batches = DataLoader(examples, batch_size=args.batch_size,
-                             collate_fn=partial(collate_examples, pad_token_id=tok.pad_token_id))
+        batches = DataLoader(
+            examples, batch_size=args.batch_size, collate_fn=partial(collate_examples, pad_token_id=tok.pad_token_id)
+        )
         loss = validation_loss(speaker.model, batches, speaker.device)
         result[name] = {"loss": round(loss, 4), "perplexity": round(math.exp(loss), 2)}
         print(json.dumps({name: result[name]}), flush=True)

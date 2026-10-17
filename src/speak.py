@@ -29,9 +29,7 @@ def prompt_ids(tokenizer, history, mode, emotion=None, strategy=None, max_tokens
     instructions = SYSTEM_PROMPT
     if mode == "conditioned":
         if not emotion or strategy not in STRATEGIES:
-            raise ValueError(
-                "Conditioned generation needs an emotion and valid strategy."
-            )
+            raise ValueError("Conditioned generation needs an emotion and valid strategy.")
         instructions += f" The seeker's emotion is {emotion}. Use this support strategy: {strategy}."
     history_tokens = tokenizer.encode(history, add_special_tokens=False)
     while True:
@@ -39,9 +37,7 @@ def prompt_ids(tokenizer, history, mode, emotion=None, strategy=None, max_tokens
             {"role": "system", "content": instructions},
             {"role": "user", "content": tokenizer.decode(history_tokens)},
         ]
-        text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         tokens = tokenizer.encode(text, add_special_tokens=False)
         excess = len(tokens) - max_tokens
         if excess <= 0:
@@ -95,9 +91,7 @@ class Speaker:
             self.model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, dtype=dtype).to(self.device).eval()
             return
         checkpoint = Path(checkpoint)
-        self.config = json.loads(
-            (checkpoint / "speak_config.json").read_text(encoding="utf-8")
-        )
+        self.config = json.loads((checkpoint / "speak_config.json").read_text(encoding="utf-8"))
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         base = AutoModelForCausalLM.from_pretrained(self.config["base_model"], dtype=dtype)
         self.model = PeftModel.from_pretrained(base, checkpoint).to(self.device).eval()
@@ -121,9 +115,7 @@ class Speaker:
             pad_token_id=self.tokenizer.pad_token_id,
             eos_token_id=self.tokenizer.eos_token_id,
         )
-        return self.tokenizer.decode(
-            output[0, len(ids) :], skip_special_tokens=True
-        ).strip()
+        return self.tokenizer.decode(output[0, len(ids) :], skip_special_tokens=True).strip()
 
     @torch.inference_mode()
     def generate_batch(self, histories, emotions=None, strategies=None, batch_size=16):
@@ -132,8 +124,10 @@ class Speaker:
         emotions = emotions or [None] * len(histories)
         strategies = strategies or [None] * len(histories)
         budget = self.config["max_length"] - self.config["max_reply_tokens"]
-        prompts = [prompt_ids(self.tokenizer, h, self.config["mode"], e, s, budget)
-                   for h, e, s in zip(histories, emotions, strategies)]
+        prompts = [
+            prompt_ids(self.tokenizer, h, self.config["mode"], e, s, budget)
+            for h, e, s in zip(histories, emotions, strategies)
+        ]
         order = sorted(range(len(prompts)), key=lambda i: len(prompts[i]))
         replies = [None] * len(prompts)
         pad = self.tokenizer.pad_token_id
@@ -141,8 +135,9 @@ class Speaker:
             idx = order[start : start + batch_size]
             width = max(len(prompts[i]) for i in idx)
             ids = torch.tensor([[pad] * (width - len(prompts[i])) + prompts[i] for i in idx], device=self.device)
-            mask = torch.tensor([[0] * (width - len(prompts[i])) + [1] * len(prompts[i]) for i in idx],
-                                device=self.device)
+            mask = torch.tensor(
+                [[0] * (width - len(prompts[i])) + [1] * len(prompts[i]) for i in idx], device=self.device
+            )
             output = self.model.generate(
                 input_ids=ids,
                 attention_mask=mask,
@@ -158,18 +153,12 @@ class Speaker:
     def generate_candidates(self, history, emotion, strategies):
         """Keep planner order and probabilities; selection belongs to Critique."""
         if self.config["mode"] != "conditioned":
-            raise ValueError(
-                "Three-strategy generation requires the conditioned adapter."
-            )
+            raise ValueError("Three-strategy generation requires the conditioned adapter.")
         if len(strategies) != 3 or len({s["strategy"] for s in strategies}) != 3:
             raise ValueError("Provide exactly three distinct strategies.")
         for item in strategies:
             probability = item["probability"]
-            if (
-                item["strategy"] not in STRATEGIES
-                or not math.isfinite(probability)
-                or not 0 <= probability <= 1
-            ):
+            if item["strategy"] not in STRATEGIES or not math.isfinite(probability) or not 0 <= probability <= 1:
                 raise ValueError("Invalid strategy or planner probability.")
         return [
             {

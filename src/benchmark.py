@@ -10,6 +10,7 @@ allocated GPU memory on a GPU. The replies are saved too, for the qualitative co
     python src/benchmark.py --critic checkpoints/critic-contrast --critic-weight 0
     python src/benchmark.py --device cpu --threads 4 --systems direct planning
 """
+
 import argparse
 import json
 import subprocess
@@ -30,10 +31,12 @@ def peak_memory_mb(device: str) -> float:
     if device == "cuda":
         return torch.cuda.max_memory_allocated() / 2**20
     import psutil
+
     info = psutil.Process().memory_info()
     if hasattr(info, "peak_wset"):  # Windows
         return info.peak_wset / 2**20
     import resource
+
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**10  # Linux reports KiB
 
 
@@ -56,20 +59,25 @@ def run_one(args) -> dict:
     if args.one in ("zeroshot", "blenderbot"):
         if args.one == "zeroshot":
             from speak import Speaker
+
             system = Speaker(None, args.device)
         else:
             from baselines import BlenderBot
+
             system = BlenderBot(args.checkpoints / "blenderbot", args.device)
         models = [system.model]
         answer = lambda text: {"reply": system.generate_batch([f"seeker: {text}"])[0]}
     else:
         from pipeline import Kaki
+
         critic = None
         if args.one == "lookahead" and args.critic:
             from critic import Critic
+
             critic = Critic(args.critic, args.device)
-        kaki = Kaki.load(args.checkpoints, configs=[args.one], critic=critic, critic_weight=args.critic_weight,
-                         device=args.device)
+        kaki = Kaki.load(
+            args.checkpoints, configs=[args.one], critic=critic, critic_weight=args.critic_weight, device=args.device
+        )
         models = [kaki.guard.model, kaki.perceiver.model, *(s.model for s in kaki.speakers.values())]
         models += [kaki.planner.model] if kaki.planner else []
         models += [kaki.critic.model] if kaki.critic is not None else []
@@ -77,11 +85,16 @@ def run_one(args) -> dict:
         def answer(text):
             out = kaki.respond([{"speaker": "seeker", "text": text}], args.one)
             chosen = out["candidates"][out["selected"]] if out["candidates"] else None
-            return {"reply": out["reply"], "bypassed": out["bypassed"],
-                    "emotion": out["perceive"]["emotion"] if out["perceive"] else None,
-                    "strategy": chosen["strategy"] if chosen else None,
-                    "candidates": [{k: c[k] for k in ("strategy", "response", "critic_score")}
-                                   for c in out["candidates"]] if args.one == "lookahead" else None}
+            return {
+                "reply": out["reply"],
+                "bypassed": out["bypassed"],
+                "emotion": out["perceive"]["emotion"] if out["perceive"] else None,
+                "strategy": chosen["strategy"] if chosen else None,
+                "candidates": [{k: c[k] for k in ("strategy", "response", "critic_score")} for c in out["candidates"]]
+                if args.one == "lookahead"
+                else None,
+            }
+
     load_seconds = time.perf_counter() - t0
     answer(queries[0]["text"])  # warm-up
     times, replies = [], []
@@ -89,10 +102,17 @@ def run_one(args) -> dict:
         start = time.perf_counter()
         replies.append({"id": q["id"], **answer(q["text"])})
         times.append(time.perf_counter() - start)
-    return {"system": args.one, "device": args.device, "threads": torch.get_num_threads(),
-            "parameters_millions": round(parameters(*models) / 1e6, 1), "load_seconds": round(load_seconds, 1),
-            "median_seconds_per_turn": round(median(times), 2), "max_seconds_per_turn": round(max(times), 2),
-            "peak_memory_mb": round(peak_memory_mb(args.device)), "replies": replies}
+    return {
+        "system": args.one,
+        "device": args.device,
+        "threads": torch.get_num_threads(),
+        "parameters_millions": round(parameters(*models) / 1e6, 1),
+        "load_seconds": round(load_seconds, 1),
+        "median_seconds_per_turn": round(median(times), 2),
+        "max_seconds_per_turn": round(max(times), 2),
+        "peak_memory_mb": round(peak_memory_mb(args.device)),
+        "replies": replies,
+    }
 
 
 def main():
@@ -112,8 +132,20 @@ def main():
         return
     results = []
     for system in args.systems:
-        cmd = [sys.executable, __file__, "--one", system, "--device", args.device, "--checkpoints",
-               str(args.checkpoints), "--queries", str(args.queries), "--critic-weight", str(args.critic_weight)]
+        cmd = [
+            sys.executable,
+            __file__,
+            "--one",
+            system,
+            "--device",
+            args.device,
+            "--checkpoints",
+            str(args.checkpoints),
+            "--queries",
+            str(args.queries),
+            "--critic-weight",
+            str(args.critic_weight),
+        ]
         cmd += ["--threads", str(args.threads)] if args.threads else []
         cmd += ["--critic", str(args.critic)] if args.critic else []
         done = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")

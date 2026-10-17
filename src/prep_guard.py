@@ -11,6 +11,7 @@ Sheet names in the release are Reddit usernames. They are replaced by integer gr
 
 Usage: python src/prep_guard.py [--seed 42] [--raw data/raw/guard] [--out data/processed/guard]
 """
+
 import argparse
 import collections
 import hashlib
@@ -19,8 +20,8 @@ import random
 import re
 import time
 import urllib.request
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,18 +36,25 @@ FILES = {  # md5 checksums published on the Zenodo record
 
 # spelling variants found in the release -> canonical label
 LABEL_MAP = {
-    "supportive": "supportive", "supporitve": "supportive", "suppr": "supportive",
-    "indicator": "indicator", "indiccator": "indicator",
-    "uninformative": "uninformative", "noninformative": "uninformative",
-    "uniformative": "uninformative", "noninformtative": "uninformative",
-    "ideation": "ideation", "ideations": "ideation", "suicidal ideations": "ideation",
+    "supportive": "supportive",
+    "supporitve": "supportive",
+    "suppr": "supportive",
+    "indicator": "indicator",
+    "indiccator": "indicator",
+    "uninformative": "uninformative",
+    "noninformative": "uninformative",
+    "uniformative": "uninformative",
+    "noninformtative": "uninformative",
+    "ideation": "ideation",
+    "ideations": "ideation",
+    "suicidal ideations": "ideation",
     "behavior": "behavior",
     "attempt": "attempt",
 }
 RISK_LABELS = {"ideation", "behavior", "attempt"}  # C-SSRS levels that warrant referral to human help
 
 SPLIT_FRACS = {"train": 0.70, "val": 0.15, "test": 0.15}  # by posts; val/test larger than ESConv's 10%
-                                                          # because positives are scarce
+# because positives are scarce
 
 XLSX = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 XLSX_REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
@@ -68,7 +76,7 @@ def fetch_raw(raw_dir: Path) -> list[Path]:
             try:
                 urllib.request.urlretrieve(ZENODO_URL.format(name), path)
             except OSError:  # includes URLError and ContentTooShortError
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
         if not path.exists() or md5(path) != checksum:
             raise ValueError(f"{name}: download incomplete or checksum mismatch (Zenodo file changed?)")
         paths.append(path)
@@ -78,8 +86,10 @@ def fetch_raw(raw_dir: Path) -> list[Path]:
 def read_sheets(path: Path) -> list[list[dict]]:
     """Rows of every sheet in workbook order, as {column letter: cell text}. Standard library only."""
     z = zipfile.ZipFile(path)
-    shared = ["".join(t.text or "" for t in si.iter(XLSX + "t"))
-              for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(XLSX + "si")]
+    shared = [
+        "".join(t.text or "" for t in si.iter(XLSX + "t"))
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(XLSX + "si")
+    ]
     targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
     sheets = []
     for sheet in ET.fromstring(z.read("xl/workbook.xml")).iter(XLSX + "sheet"):
@@ -123,8 +133,7 @@ def load_posts(paths: list[Path]) -> tuple[list[dict], collections.Counter]:
                     raise ValueError(f"unknown label {raw!r}; add it to LABEL_MAP")
                 counts[f"label_spelling:{raw}"] += 1
                 label = LABEL_MAP[raw]
-                posts.append({"group": group, "text": text, "label_raw": label,
-                              "label": int(label in RISK_LABELS)})
+                posts.append({"group": group, "text": text, "label_raw": label, "label": int(label in RISK_LABELS)})
             group += 1
     counts["groups"] = group
     return posts, counts
@@ -182,13 +191,19 @@ def main():
 
     args.out.mkdir(parents=True, exist_ok=True)
     report = {
-        "source": "Gaur et al. 2021, Zenodo 4543776 (CC BY 4.0)", "seed": args.seed,
-        "file_md5": FILES, "risk_labels": sorted(RISK_LABELS),
-        "user_sheets": counts["groups"], "empty_sheets": counts["empty_sheets"],
-        "unlabelled_posts_excluded": counts["unlabelled_posts"], "labelled_posts": n_labelled,
+        "source": "Gaur et al. 2021, Zenodo 4543776 (CC BY 4.0)",
+        "seed": args.seed,
+        "file_md5": FILES,
+        "risk_labels": sorted(RISK_LABELS),
+        "user_sheets": counts["groups"],
+        "empty_sheets": counts["empty_sheets"],
+        "unlabelled_posts_excluded": counts["unlabelled_posts"],
+        "labelled_posts": n_labelled,
         "label_spellings": {k.split(":", 1)[1]: v for k, v in counts.items() if k.startswith("label_spelling:")},
-        "duplicates_removed": n_dups, "conflicting_duplicates_removed": n_conflicts,
-        "posts_after_dedup": len(posts), "splits": {},
+        "duplicates_removed": n_dups,
+        "conflicting_duplicates_removed": n_conflicts,
+        "posts_after_dedup": len(posts),
+        "splits": {},
     }
     for name in SPLIT_FRACS:
         rows = [p for p in posts if group_split[p["group"]] == name]

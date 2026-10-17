@@ -6,6 +6,7 @@ per seeker turn (history up to and including that turn).
 
 Usage: python src/prep.py [--seed 42] [--out data/processed]
 """
+
 import argparse
 import collections
 import json
@@ -22,8 +23,13 @@ HF_FILE = "ESConv.json"
 EMOTION_MAP = {"nervousness": "anxiety", "pain": "other", "jealousy": "other", "guilt": "other"}
 PROBLEM_MAP = {"issues with parents": "conflict with parents"}
 MIN_PROBLEM_DIALOGUES = 15  # problem classes smaller than this -> "other"
-IN_SCOPE_PROBLEMS = {"ongoing depression", "job crisis", "breakup with partner",
-                     "problems with friends", "academic pressure"}
+IN_SCOPE_PROBLEMS = {
+    "ongoing depression",
+    "job crisis",
+    "breakup with partner",
+    "problems with friends",
+    "academic pressure",
+}
 
 SPLIT_FRACS = {"val": 0.1, "test": 0.1}  # train gets the rest
 
@@ -71,8 +77,9 @@ def merge_turns(dialog: list[dict]) -> tuple[list[dict], int]:
 
 def collapse_labels(dialogues: list[dict]) -> dict[int, dict]:
     """Per-dialogue (index into list) label info: raw + collapsed emotion/problem."""
-    problems = [PROBLEM_MAP.get(d["problem_type"].strip().lower(), d["problem_type"].strip().lower())
-                for d in dialogues]
+    problems = [
+        PROBLEM_MAP.get(d["problem_type"].strip().lower(), d["problem_type"].strip().lower()) for d in dialogues
+    ]
     counts = collections.Counter(problems)
     out = {}
     for i, d in enumerate(dialogues):
@@ -102,8 +109,8 @@ def split_dialogues(ids: list[int], strata: dict[int, str], seed: int) -> dict[s
         n_val = round(len(members) * SPLIT_FRACS["val"])
         n_test = round(len(members) * SPLIT_FRACS["test"])
         split["val"] += members[:n_val]
-        split["test"] += members[n_val:n_val + n_test]
-        split["train"] += members[n_val + n_test:]
+        split["test"] += members[n_val : n_val + n_test]
+        split["train"] += members[n_val + n_test :]
     return {k: sorted(v) for k, v in split.items()}
 
 
@@ -119,12 +126,14 @@ def build_samples(dialogue_id: int, turns: list[dict], labels: dict) -> list[dic
         if t["speaker"] != "seeker":
             continue
         seeker_idx += 1
-        samples.append({
-            "dialogue_id": dialogue_id,
-            "turn_idx": seeker_idx,  # 1-based seeker-turn position, for accuracy-by-position
-            "text": render_history(turns[: end + 1]),
-            **labels,
-        })
+        samples.append(
+            {
+                "dialogue_id": dialogue_id,
+                "turn_idx": seeker_idx,  # 1-based seeker-turn position, for accuracy-by-position
+                "text": render_history(turns[: end + 1]),
+                **labels,
+            }
+        )
     return samples
 
 
@@ -163,8 +172,13 @@ def main():
     }
 
     args.out.mkdir(parents=True, exist_ok=True)
-    report = {"seed": args.seed, "raw_dialogues": len(raw), "duplicates_removed": n_dups,
-              "consecutive_utterances_merged": total_merges, "splits": {}}
+    report = {
+        "seed": args.seed,
+        "raw_dialogues": len(raw),
+        "duplicates_removed": n_dups,
+        "consecutive_utterances_merged": total_merges,
+        "splits": {},
+    }
     for name, split_ids in split.items():
         samples = []
         for i in split_ids:
@@ -182,8 +196,11 @@ def main():
         }
 
     # UTF-8 with LF line endings on every OS, so splits.json has the same fingerprint everywhere
-    for name, obj in (("splits.json", {"seed": args.seed, **split}), ("label_maps.json", label_maps),
-                      ("prep_report.json", report)):
+    for name, obj in (
+        ("splits.json", {"seed": args.seed, **split}),
+        ("label_maps.json", label_maps),
+        ("prep_report.json", report),
+    ):
         (args.out / name).write_text(json.dumps(obj, indent=1), encoding="utf-8", newline="\n")
     print(json.dumps(report, indent=1))
 

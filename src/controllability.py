@@ -16,6 +16,7 @@ strategy anyway.
 
     python src/controllability.py --tagger checkpoints/strategy-tagger
 """
+
 import argparse
 import json
 import random
@@ -38,8 +39,9 @@ def tag(model, tokenizer, texts, batch_size=64) -> list[str]:
     device = next(model.parameters()).device
     out = []
     for start in range(0, len(texts), batch_size):
-        enc = tokenizer(texts[start: start + batch_size], truncation=True, max_length=512, padding=True,
-                        return_tensors="pt").to(device)
+        enc = tokenizer(
+            texts[start : start + batch_size], truncation=True, max_length=512, padding=True, return_tensors="pt"
+        ).to(device)
         out += [model.config.id2label[int(i)] for i in model(**enc).logits.argmax(-1)]
     return out
 
@@ -75,8 +77,11 @@ def main():
     result = {"tagger": str(args.tagger)}
 
     # replies of the test run
-    runs = {c: [r for r in read_jsonl(args.outputs / f"{c}.jsonl") if not r["bypassed"]]
-            for c in ("direct", "planning", "lookahead") if (args.outputs / f"{c}.jsonl").exists()}
+    runs = {
+        c: [r for r in read_jsonl(args.outputs / f"{c}.jsonl") if not r["bypassed"]]
+        for c in ("direct", "planning", "lookahead")
+        if (args.outputs / f"{c}.jsonl").exists()
+    }
     if runs:
         rows = next(iter(runs.values()))
         refs = [r["reference_strategy"] for r in rows]
@@ -90,6 +95,7 @@ def main():
 
     # one reply per strategy for the same histories
     from speak import Speaker
+
     test = [r for r in read_jsonl(args.data / "responses_test.jsonl") if ends_with_seeker(r["text"])]
     sample = random.Random(args.seed).sample(test, min(args.histories, len(test)))
     histories, emotions = [r["text"] for r in sample], [r["emotion"] for r in sample]
@@ -103,19 +109,33 @@ def main():
     plain = tag(model, tokenizer, Speaker(args.checkpoints / "speak-history", device).generate_batch(histories))
     floor = Counter(plain)
     result["forced"] = {
-        "histories": len(sample), "seed": args.seed, "labels": labels,
+        "histories": len(sample),
+        "seed": args.seed,
+        "labels": labels,
         **agreement(asked, tagged),
         "history_only_tagged_as": {s: floor[s] / len(plain) for s in labels},
-        "tagger_on_references": agreement([r["strategy"] for r in sample],
-                                          tag(model, tokenizer, [r["response"] for r in sample])),
+        "tagger_on_references": agreement(
+            [r["strategy"] for r in sample], tag(model, tokenizer, [r["response"] for r in sample])
+        ),
         "confusion": confusion(asked, tagged, labels),
     }
     folder = private_dir(args.outputs)
     with open(folder / "controllability_replies.jsonl", "w", encoding="utf-8") as f:
         for i, (a, t, reply) in enumerate(zip(asked, tagged, replies)):
             r = sample[i % len(sample)]
-            f.write(json.dumps({"dialogue_id": r["dialogue_id"], "utterance_idx": r["utterance_idx"],
-                                "asked": a, "tagged": t, "reply": reply}, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "dialogue_id": r["dialogue_id"],
+                        "utterance_idx": r["utterance_idx"],
+                        "asked": a,
+                        "tagged": t,
+                        "reply": reply,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
     (folder / "controllability.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "forced"}, indent=1))
     print(json.dumps({k: v for k, v in result["forced"].items() if k != "confusion"}, indent=1))

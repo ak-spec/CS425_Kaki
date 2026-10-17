@@ -1,0 +1,8 @@
+# Formatting and lint settings, used with `ruff format` and `ruff check` (ruff is optional, not a requirement).
+[tool.ruff]
+line-length = 120
+src = ["src", "tests", "."]
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E9", "F", "I"]

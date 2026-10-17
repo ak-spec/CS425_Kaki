@@ -22,6 +22,7 @@ Per configuration, in data/simulation/summary.json:
     python src/simulate.py --critic checkpoints/critic-contrast --critic-weight 0
     python src/simulate.py --sessions 4 --turns 2 --output data/simulation-check     # quick check
 """
+
 import argparse
 import json
 import random
@@ -49,8 +50,10 @@ SEEKER_PROMPT = (
     "the supporter has helped enough and you want to stop, say goodbye and end that message with [END]."
 )
 OPENING = "(You have just joined the chat. Write your first message to the supporter.)"
-CLOSING = ("(The chat is over. Step out of the role for a moment: on a scale of 1 to 5, how helpful was the "
-           "supporter in this chat, where 1 is not at all and 5 is very helpful? Answer with one digit.)")
+CLOSING = (
+    "(The chat is over. Step out of the role for a moment: on a scale of 1 to 5, how helpful was the "
+    "supporter in this chat, where 1 is not at all and 5 is very helpful? Answer with one digit.)"
+)
 END = "[END]"
 
 
@@ -58,9 +61,15 @@ def situations(raw: list[dict], splits: dict, n: int, seed: int) -> list[dict]:
     """n ESConv validation and test dialogues: their id, situation, emotion and problem only."""
     ids = sorted(splits["val"] + splits["test"])
     chosen = sorted(random.Random(seed).sample(ids, min(n, len(ids))))
-    return [{"dialogue_id": i, "situation": " ".join(raw[i]["situation"].split()),
-             "emotion": raw[i]["emotion_type"].strip().lower(), "problem": raw[i]["problem_type"].strip().lower()}
-            for i in chosen]
+    return [
+        {
+            "dialogue_id": i,
+            "situation": " ".join(raw[i]["situation"].split()),
+            "emotion": raw[i]["emotion_type"].strip().lower(),
+            "problem": raw[i]["problem_type"].strip().lower(),
+        }
+        for i in chosen
+    ]
 
 
 def seeker_messages(session: dict, turns: list[dict], closing: bool = False) -> list[dict]:
@@ -88,7 +97,7 @@ def rating(answer: str):
 
 def trigrams(text: str) -> set:
     w = words(text)
-    return {tuple(w[i: i + 3]) for i in range(len(w) - 2)}
+    return {tuple(w[i : i + 3]) for i in range(len(w) - 2)}
 
 
 def repeats(replies: list[str], share: float = 0.5) -> list[bool]:
@@ -102,28 +111,42 @@ def repeats(replies: list[str], share: float = 0.5) -> list[bool]:
 
 
 class Seeker:
-    def __init__(self, name=SEEKER_MODEL, device=None, batch_size=8, temperature=0.7, top_p=0.9,
-                 max_new_tokens=80):
+    def __init__(self, name=SEEKER_MODEL, device=None, batch_size=8, temperature=0.7, top_p=0.9, max_new_tokens=80):
         from transformers import AutoModelForCausalLM, AutoTokenizer
+
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="left")
         dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
         self.model = AutoModelForCausalLM.from_pretrained(name, dtype=dtype).to(self.device).eval()
-        self.batch_size, self.temperature, self.top_p, self.max_new_tokens = batch_size, temperature, top_p, max_new_tokens
+        self.batch_size, self.temperature, self.top_p, self.max_new_tokens = (
+            batch_size,
+            temperature,
+            top_p,
+            max_new_tokens,
+        )
 
     @torch.inference_mode()
     def __call__(self, chats: list[list[dict]], seed: int, sample: bool = True, max_new_tokens=None) -> list[str]:
         out = []
         for start in range(0, len(chats), self.batch_size):
-            texts = [self.tokenizer.apply_chat_template(c, tokenize=False, add_generation_prompt=True)
-                     for c in chats[start: start + self.batch_size]]
+            texts = [
+                self.tokenizer.apply_chat_template(c, tokenize=False, add_generation_prompt=True)
+                for c in chats[start : start + self.batch_size]
+            ]
             enc = self.tokenizer(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(self.device)
             torch.manual_seed(seed + start)
-            settings = ({"do_sample": True, "temperature": self.temperature, "top_p": self.top_p} if sample else
-                        {"do_sample": False, "temperature": None, "top_p": None, "top_k": None})
-            gen = self.model.generate(**enc, **settings, max_new_tokens=max_new_tokens or self.max_new_tokens,
-                                      pad_token_id=self.tokenizer.pad_token_id)
-            out += [self.tokenizer.decode(g[enc.input_ids.shape[1]:], skip_special_tokens=True).strip() for g in gen]
+            settings = (
+                {"do_sample": True, "temperature": self.temperature, "top_p": self.top_p}
+                if sample
+                else {"do_sample": False, "temperature": None, "top_p": None, "top_k": None}
+            )
+            gen = self.model.generate(
+                **enc,
+                **settings,
+                max_new_tokens=max_new_tokens or self.max_new_tokens,
+                pad_token_id=self.tokenizer.pad_token_id,
+            )
+            out += [self.tokenizer.decode(g[enc.input_ids.shape[1] :], skip_special_tokens=True).strip() for g in gen]
         return out
 
 
@@ -148,16 +171,23 @@ def converse(kaki, seeker, sessions: list[dict], openers: list[str], config: str
                 continue
             out = kaki.respond(c["turns"], config)
             chosen = out["candidates"][out["selected"]] if out["candidates"] else None
-            c["replies"].append({"history": render(c["turns"]), "reply": out["reply"], "bypassed": out["bypassed"],
-                                 "strategy": chosen["strategy"] if chosen else None,
-                                 "guard_score": out["guard"].get("model_score")})
+            c["replies"].append(
+                {
+                    "history": render(c["turns"]),
+                    "reply": out["reply"],
+                    "bypassed": out["bypassed"],
+                    "strategy": chosen["strategy"] if chosen else None,
+                    "guard_score": out["guard"].get("model_score"),
+                }
+            )
             c["turns"].append({"speaker": "supporter", "text": out["reply"]})
             if out["bypassed"]:
                 c["ended_by"] = "guard"
     for c in chats:
         c["ended_by"] = c["ended_by"] or "turn_limit"
-    answers = seeker([seeker_messages(c, c["turns"], closing=True) for c in chats], seed=0, sample=False,
-                     max_new_tokens=4)
+    answers = seeker(
+        [seeker_messages(c, c["turns"], closing=True) for c in chats], seed=0, sample=False, max_new_tokens=4
+    )
     for c, a in zip(chats, answers):
         c["seeker_rating"] = rating(a)
     return chats
@@ -176,7 +206,9 @@ def summarise(chats: list[dict]) -> dict:
         "seeker_turns_per_chat": mean(sum(t["speaker"] == "seeker" for t in c["turns"]) for c in chats),
         "ended_by_seeker": mean(c["ended_by"] == "seeker" for c in chats),
         "ended_by_guard": mean(c["ended_by"] == "guard" for c in chats),
-        "eval_critic": mean(r["eval_critic"] for r in generated) if generated and "eval_critic" in generated[0] else None,
+        "eval_critic": mean(r["eval_critic"] for r in generated)
+        if generated and "eval_critic" in generated[0]
+        else None,
         "seeker_rating": mean(ratings) if ratings else None,
         "seeker_rating_missing": len(chats) - len(ratings),
         "repetition": mean(rep) if rep else None,
@@ -184,16 +216,22 @@ def summarise(chats: list[dict]) -> dict:
         "distinct2": 100 * distinct(texts, 2),
         "reply_length": mean(len(words(t)) for t in texts) if texts else None,
         "seeker_message_length": mean(seeker_words) if seeker_words else None,
-        "strategies_per_chat": (mean(len({r["strategy"] for r in c["replies"] if r["strategy"]}) for c in with_strategy)
-                                if with_strategy else None),
+        "strategies_per_chat": (
+            mean(len({r["strategy"] for r in c["replies"] if r["strategy"]}) for c in with_strategy)
+            if with_strategy
+            else None
+        ),
     }
 
 
 def per_chat(chats: list[dict], measure: str) -> dict:
     """{dialogue_id: value} for paired comparisons; chats without the value are left out."""
     if measure == "eval_critic":
-        return {c["dialogue_id"]: mean(r["eval_critic"] for r in c["replies"] if not r["bypassed"])
-                for c in chats if any(not r["bypassed"] for r in c["replies"])}
+        return {
+            c["dialogue_id"]: mean(r["eval_critic"] for r in c["replies"] if not r["bypassed"])
+            for c in chats
+            if any(not r["bypassed"] for r in c["replies"])
+        }
     return {c["dialogue_id"]: c[measure] for c in chats if c[measure] is not None}
 
 
@@ -222,6 +260,7 @@ def main():
     critic = None
     if args.critic:
         from critic import Critic
+
         critic = Critic(args.critic)
     results = {}
     for config in args.configs:
@@ -235,31 +274,41 @@ def main():
     torch.cuda.empty_cache()
     if args.eval_critic:
         from critic import Critic, predict_ratings
+
         judge = Critic(args.eval_critic)
         for chats in results.values():
             replies = [r for c in chats for r in c["replies"] if not r["bypassed"]]
-            scores = predict_ratings(judge.model, judge.tokenizer, [r["history"] for r in replies],
-                                     [r["reply"] for r in replies], judge.max_len)
+            scores = predict_ratings(
+                judge.model,
+                judge.tokenizer,
+                [r["history"] for r in replies],
+                [r["reply"] for r in replies],
+                judge.max_len,
+            )
             for r, s in zip(replies, scores):
                 r["eval_critic"] = s
     for config, chats in results.items():
         with open(out / f"{config}.jsonl", "w", encoding="utf-8") as f:
             for c in chats:
                 f.write(json.dumps(c, ensure_ascii=False) + "\n")
-    summary = {"settings": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-               "minutes": round((time.time() - t0) / 60, 1),
-               "configs": {c: summarise(chats) for c, chats in results.items()}, "differences": {}}
+    summary = {
+        "settings": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "minutes": round((time.time() - t0) / 60, 1),
+        "configs": {c: summarise(chats) for c, chats in results.items()},
+        "differences": {},
+    }
     for measure in ("eval_critic", "seeker_rating"):
         if measure == "eval_critic" and not args.eval_critic:
             continue
         values = {c: per_chat(chats, measure) for c, chats in results.items()}
         configs = list(values)
         for i, a in enumerate(configs):
-            for b in configs[i + 1:]:
+            for b in configs[i + 1 :]:
                 shared = sorted(set(values[a]) & set(values[b]))
                 summary["differences"].setdefault(f"{a} - {b}", {})[measure] = {
-                    "chats": len(shared), **bootstrap_diff([values[a][k] for k in shared],
-                                                           [values[b][k] for k in shared])}
+                    "chats": len(shared),
+                    **bootstrap_diff([values[a][k] for k in shared], [values[b][k] for k in shared]),
+                }
     (out / "summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary["configs"], indent=1))
     print(json.dumps(summary["differences"], indent=1))

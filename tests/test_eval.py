@@ -2,6 +2,7 @@
 
 Run from the repository root: python -m unittest discover -s tests -v
 """
+
 import contextlib
 import csv
 import io
@@ -27,12 +28,21 @@ def write_jsonl(path, rows):
 
 
 def response_row(dialogue, idx, text, problem="academic pressure", in_scope=True):
-    return {"dialogue_id": dialogue, "utterance_idx": idx, "text": text, "response": "ref",
-            "strategy": "Question", "problem": problem, "in_scope": in_scope}
+    return {
+        "dialogue_id": dialogue,
+        "utterance_idx": idx,
+        "text": text,
+        "response": "ref",
+        "strategy": "Question",
+        "problem": problem,
+        "in_scope": in_scope,
+    }
 
 
-TWO_SEEKER = ("seeker: hi | supporter: Hello, what is on your mind? | seeker: my exams are next week and I "
-              "cannot sleep because I keep thinking that I will fail all of them")
+TWO_SEEKER = (
+    "seeker: hi | supporter: Hello, what is on your mind? | seeker: my exams are next week and I "
+    "cannot sleep because I keep thinking that I will fail all of them"
+)
 
 
 class SelectionTests(unittest.TestCase):
@@ -73,7 +83,6 @@ class SelectionTests(unittest.TestCase):
             select(rows, n=5, seed=0)
 
 
-
 class FakeGuard:
     def check(self, turns):
         flagged = "crisis" in turns[-1]["text"]
@@ -90,9 +99,11 @@ class FakePerceiver:
 
 class FakePlanner:
     def predict(self, history):
-        return [{"strategy": "Question", "probability": 0.5},
-                {"strategy": "Reflection of feelings", "probability": 0.3},
-                {"strategy": "Others", "probability": 0.1}]
+        return [
+            {"strategy": "Question", "probability": 0.5},
+            {"strategy": "Reflection of feelings", "probability": 0.3},
+            {"strategy": "Others", "probability": 0.1},
+        ]
 
 
 class FakeSpeaker:
@@ -100,8 +111,14 @@ class FakeSpeaker:
         return f"{strategy or 'plain'} reply to: {history.split(': ')[-1]}"
 
     def generate_candidates(self, history, emotion, strategies):
-        return [{"strategy": s["strategy"], "planner_probability": s["probability"],
-                 "response": self.generate(history, emotion, s["strategy"])} for s in strategies]
+        return [
+            {
+                "strategy": s["strategy"],
+                "planner_probability": s["probability"],
+                "response": self.generate(history, emotion, s["strategy"]),
+            }
+            for s in strategies
+        ]
 
 
 def fake_kaki():
@@ -109,19 +126,35 @@ def fake_kaki():
     return Kaki(FakeGuard(), FakePerceiver(), FakePlanner(), {"history": FakeSpeaker(), "conditioned": FakeSpeaker()})
 
 
-RAW = [{"dialog": [{"speaker": "seeker", "content": "hi"},
-                   {"speaker": "supporter", "content": "Hello,  how are you?"},
-                   {"speaker": "seeker", "content": "  my exams are soon"},
-                   {"speaker": "supporter", "content": "That sounds stressful."},
-                   {"speaker": "supporter", "content": "Which subject?"},
-                   {"speaker": "seeker", "content": "I am in crisis"},
-                   {"speaker": "supporter", "content": "Please reach out."}]}]
+RAW = [
+    {
+        "dialog": [
+            {"speaker": "seeker", "content": "hi"},
+            {"speaker": "supporter", "content": "Hello,  how are you?"},
+            {"speaker": "seeker", "content": "  my exams are soon"},
+            {"speaker": "supporter", "content": "That sounds stressful."},
+            {"speaker": "supporter", "content": "Which subject?"},
+            {"speaker": "seeker", "content": "I am in crisis"},
+            {"speaker": "supporter", "content": "Please reach out."},
+        ]
+    }
+]
 
 
 def test_rows():
     dialog = RAW[0]["dialog"]
-    return [{"dialogue_id": 0, "utterance_idx": i, "text": history(dialog[:i]), "response": dialog[i]["content"],
-             "strategy": "Question", "problem": "academic pressure", "emotion": "anxiety"} for i in (1, 3, 4, 6)]
+    return [
+        {
+            "dialogue_id": 0,
+            "utterance_idx": i,
+            "text": history(dialog[:i]),
+            "response": dialog[i]["content"],
+            "strategy": "Question",
+            "problem": "academic pressure",
+            "emotion": "anxiety",
+        }
+        for i in (1, 3, 4, 6)
+    ]
 
 
 class GenerateTests(unittest.TestCase):
@@ -155,11 +188,24 @@ class GenerateTests(unittest.TestCase):
             self.assertEqual(len(read_jsonl(out / "direct.jsonl")), 2)
 
     def test_history_without_a_seeker_turn_is_skipped(self):
-        raw = [{"dialog": [{"speaker": "supporter", "content": "Hi there"},
-                           {"speaker": "supporter", "content": "How are you?"},
-                           {"speaker": "seeker", "content": "tired"}]}]
-        row = {"dialogue_id": 0, "utterance_idx": 1, "text": history(raw[0]["dialog"][:1]), "response": "How are you?",
-               "strategy": "Question", "problem": "other", "emotion": "other"}
+        raw = [
+            {
+                "dialog": [
+                    {"speaker": "supporter", "content": "Hi there"},
+                    {"speaker": "supporter", "content": "How are you?"},
+                    {"speaker": "seeker", "content": "tired"},
+                ]
+            }
+        ]
+        row = {
+            "dialogue_id": 0,
+            "utterance_idx": 1,
+            "text": history(raw[0]["dialog"][:1]),
+            "response": "How are you?",
+            "strategy": "Question",
+            "problem": "other",
+            "emotion": "other",
+        }
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
             out = Path(tmp) / "outputs"
             self.assertEqual(generate(fake_kaki(), [row], CONFIGS, out, raw), dict.fromkeys(CONFIGS, 0))
@@ -170,8 +216,12 @@ class GenerateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             data, contexts = Path(tmp) / "responses.jsonl", Path(tmp) / "contexts.json"
             write_jsonl(data, rows)
-            contexts.write_text(json.dumps({"contexts": [{"dialogue_id": 0, "utterance_idx": 4},
-                                                         {"dialogue_id": 0, "utterance_idx": 1}]}), encoding="utf-8")
+            contexts.write_text(
+                json.dumps(
+                    {"contexts": [{"dialogue_id": 0, "utterance_idx": 4}, {"dialogue_id": 0, "utterance_idx": 1}]}
+                ),
+                encoding="utf-8",
+            )
             self.assertEqual([r["utterance_idx"] for r in load_rows(data, contexts)], [4, 1])
             self.assertEqual(len(load_rows(data, limit=3)), 3)
             contexts.write_text(json.dumps({"contexts": [{"dialogue_id": 5, "utterance_idx": 1}]}), encoding="utf-8")
@@ -179,20 +229,32 @@ class GenerateTests(unittest.TestCase):
                 load_rows(data, contexts)
 
 
-
 def output_row(config, idx, reply, strategy=None, bypassed=False, after_seeker=True):
-    return {"dialogue_id": 1, "utterance_idx": idx, "config": config, "reply": reply,
-            "reference": "that sounds hard", "reference_strategy": "Question", "strategy": strategy,
-            "bypassed": bypassed, "after_seeker": after_seeker}
+    return {
+        "dialogue_id": 1,
+        "utterance_idx": idx,
+        "config": config,
+        "reply": reply,
+        "reference": "that sounds hard",
+        "reference_strategy": "Question",
+        "strategy": strategy,
+        "bypassed": bypassed,
+        "after_seeker": after_seeker,
+    }
 
 
 def output_data():
     return {
-        "direct": [output_row("direct", 1, "that sounds hard"), output_row("direct", 2, "ok ok", after_seeker=False),
-                   output_row("direct", 3, "prepared", bypassed=True)],
-        "planning": [output_row("planning", 1, "that sounds hard", "Question"),
-                     output_row("planning", 2, "why", "Others", after_seeker=False),
-                     output_row("planning", 3, "prepared", bypassed=True)],
+        "direct": [
+            output_row("direct", 1, "that sounds hard"),
+            output_row("direct", 2, "ok ok", after_seeker=False),
+            output_row("direct", 3, "prepared", bypassed=True),
+        ],
+        "planning": [
+            output_row("planning", 1, "that sounds hard", "Question"),
+            output_row("planning", 2, "why", "Others", after_seeker=False),
+            output_row("planning", 3, "prepared", bypassed=True),
+        ],
     }
 
 
@@ -249,24 +311,30 @@ class MetricsTests(unittest.TestCase):
 
 # Krippendorff (2011), "Computing Krippendorff's Alpha-Reliability": 4 observers, 12 units, missing values.
 # Published: nominal 0.743, ordinal 0.815, interval 0.849.
-KRIPPENDORFF_2011 = [[1, 2, 3, 3, 2, 1, 4, 1, 2, None, None, None],
-                     [1, 2, 3, 3, 2, 2, 4, 1, 2, 5, None, 3],
-                     [None, 3, 3, 3, 2, 3, 4, 2, 2, 5, 1, None],
-                     [1, 2, 3, 3, 2, 4, 4, 1, 2, 5, 1, None]]
+KRIPPENDORFF_2011 = [
+    [1, 2, 3, 3, 2, 1, 4, 1, 2, None, None, None],
+    [1, 2, 3, 3, 2, 2, 4, 1, 2, 5, None, 3],
+    [None, 3, 3, 3, 2, 3, 4, 2, 2, 5, 1, None],
+    [1, 2, 3, 3, 2, 4, 4, 1, 2, 5, 1, None],
+]
 
 
 def sheet_inputs():
     contexts = [response_row(7, 3, TWO_SEEKER), response_row(9, 5, TWO_SEEKER)]
-    outputs = {c: {(r["dialogue_id"], r["utterance_idx"]): {"reply": f"{c} reply {r['dialogue_id']}"}
-                   for r in contexts} for c in CONFIGS}
+    outputs = {
+        c: {(r["dialogue_id"], r["utterance_idx"]): {"reply": f"{c} reply {r['dialogue_id']}"} for r in contexts}
+        for c in CONFIGS
+    }
     return contexts, outputs
 
 
 def fill(sheet, key, rating_of):
     """A filled copy of the sheet; rating_of(config, criterion) gives each rating."""
     config_of = {(c["context"], label): group[0] for c in key["contexts"] for label, group in c["labels"].items()}
-    return {(r["context"], r["label"]): {c: rating_of(config_of[r["context"], r["label"]], c) for c in CRITERIA}
-            for r in sheet}
+    return {
+        (r["context"], r["label"]): {c: rating_of(config_of[r["context"], r["label"]], c) for c in CRITERIA}
+        for r in sheet
+    }
 
 
 class HumanEvalTests(unittest.TestCase):
@@ -282,8 +350,9 @@ class HumanEvalTests(unittest.TestCase):
         contexts, outputs = sheet_inputs()
         sheet, key = build(contexts, outputs, seed=3)
         self.assertEqual((sheet, key), build(contexts, outputs, seed=3))
-        self.assertEqual([(r["context"], r["label"]) for r in sheet], [(1, "A"), (1, "B"), (1, "C"),
-                                                                       (2, "A"), (2, "B"), (2, "C")])
+        self.assertEqual(
+            [(r["context"], r["label"]) for r in sheet], [(1, "A"), (1, "B"), (1, "C"), (2, "A"), (2, "B"), (2, "C")]
+        )
         self.assertTrue(sheet[0]["history"].startswith("Seeker: hi\nSupporter: Hello"))
         self.assertEqual([r["history"] for r in sheet[1:3]], ["", ""])
         for row in sheet:
@@ -292,8 +361,10 @@ class HumanEvalTests(unittest.TestCase):
             self.assertEqual(set(row), set(FIELDS))
         self.assertEqual(sorted(g for group in key["contexts"][0]["labels"].values() for g in group), sorted(CONFIGS))
         self.assertEqual((key["contexts"][1]["dialogue_id"], key["contexts"][1]["utterance_idx"]), (9, 5))
-        orders = {tuple(g[0] for g in build(contexts, outputs, seed=s)[1]["contexts"][0]["labels"].values())
-                  for s in range(20)}
+        orders = {
+            tuple(g[0] for g in build(contexts, outputs, seed=s)[1]["contexts"][0]["labels"].values())
+            for s in range(20)
+        }
         self.assertGreater(len(orders), 1)
 
     def test_read_sheet_rejects_missing_or_out_of_range_ratings(self):
@@ -304,12 +375,14 @@ class HumanEvalTests(unittest.TestCase):
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=FIELDS)
                 writer.writeheader()
-                writer.writerows([dict(r, relevance=4, acknowledgement="4.0", helpfulness=5, fluency=3, safety=5)
-                                  for r in sheet])
+                writer.writerows(
+                    [dict(r, relevance=4, acknowledgement="4.0", helpfulness=5, fluency=3, safety=5) for r in sheet]
+                )
                 f.write(",,,,,,,,,\n")
             ratings = read_sheet(path)
-            self.assertEqual(ratings[1, "A"], {"relevance": 4, "acknowledgement": 4, "helpfulness": 5, "fluency": 3,
-                                               "safety": 5})
+            self.assertEqual(
+                ratings[1, "A"], {"relevance": 4, "acknowledgement": 4, "helpfulness": 5, "fluency": 3, "safety": 5}
+            )
             self.assertEqual(len(ratings), 6)
             with open(path, "a", encoding="utf-8", newline="") as f:
                 f.write("1,A,,reply,6,,3.5,2,\n")
@@ -332,8 +405,10 @@ class HumanEvalTests(unittest.TestCase):
         self.assertEqual(report["means_per_rater"][1]["direct"]["fluency"], 3.5)
         self.assertEqual(report["alpha_ordinal"]["relevance"], 1.0)
         self.assertLess(report["alpha_ordinal"]["fluency"], 1.0)
-        self.assertEqual(report["disagreements"], [{"context": unit[0], "label": unit[1], "configs": ["direct"],
-                                                    "criterion": "fluency", "ratings": [2, 5]}])
+        self.assertEqual(
+            report["disagreements"],
+            [{"context": unit[0], "label": unit[1], "configs": ["direct"], "criterion": "fluency", "ratings": [2, 5]}],
+        )
         with self.assertRaises(ValueError):
             score([rater1, {}], key)
 
@@ -345,18 +420,33 @@ class HumanEvalTests(unittest.TestCase):
         self.assertEqual(len(sheet), 4)  # two distinct replies per context
         groups = sorted(sorted(g) for g in key["contexts"][0]["labels"].values())
         self.assertEqual(groups, [["direct"], ["lookahead", "planning"]])
-        ratings = {(r["context"], r["label"]): dict.fromkeys(CRITERIA, 3 if r["reply"].startswith("direct") else 5)
-                   for r in sheet}
+        ratings = {
+            (r["context"], r["label"]): dict.fromkeys(CRITERIA, 3 if r["reply"].startswith("direct") else 5)
+            for r in sheet
+        }
         report = score([ratings, ratings], key)
-        self.assertEqual((report["means"]["planning"]["relevance"], report["means"]["lookahead"]["relevance"],
-                          report["means"]["direct"]["relevance"]), (5, 5, 3))
+        self.assertEqual(
+            (
+                report["means"]["planning"]["relevance"],
+                report["means"]["lookahead"]["relevance"],
+                report["means"]["direct"]["relevance"],
+            ),
+            (5, 5, 3),
+        )
 
 
 class CompareTests(unittest.TestCase):
     def test_rows_are_aligned_and_filtered(self):
         def line(c, key, after=True, bypassed=False):
-            return {"dialogue_id": key[0], "utterance_idx": key[1], "reference": f"ref {key}", "reply": f"{c} {key}",
-                    "after_seeker": after, "bypassed": bypassed}
+            return {
+                "dialogue_id": key[0],
+                "utterance_idx": key[1],
+                "reference": f"ref {key}",
+                "reply": f"{c} {key}",
+                "after_seeker": after,
+                "bypassed": bypassed,
+            }
+
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             for c in CONFIGS:

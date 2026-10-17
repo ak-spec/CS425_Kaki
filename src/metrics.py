@@ -17,6 +17,7 @@ reference-free metrics.
     python src/metrics.py --bertscore-model distilroberta-base --bertscore-layer 5    # small CPU check
     python src/metrics.py --no-bertscore
 """
+
 import argparse
 import csv
 import json
@@ -32,11 +33,25 @@ from select_eval_contexts import read_jsonl
 ROOT = Path(__file__).resolve().parent.parent
 WORD = re.compile(r"[\w']+")
 BLEU_SETTINGS = {"lowercase": True, "tokenize": "13a"}
-COLUMNS = [("bleu2", "BLEU-2"), ("bleu4", "BLEU-4"), ("rouge_l", "ROUGE-L"), ("bertscore_f1", "BERTScore"),
-           ("distinct1", "D-1"), ("distinct2", "D-2"), ("length", "Length"), ("strategy_acc", "Strategy acc.")]
+COLUMNS = [
+    ("bleu2", "BLEU-2"),
+    ("bleu4", "BLEU-4"),
+    ("rouge_l", "ROUGE-L"),
+    ("bertscore_f1", "BERTScore"),
+    ("distinct1", "D-1"),
+    ("distinct2", "D-2"),
+    ("length", "Length"),
+    ("strategy_acc", "Strategy acc."),
+]
 SYSTEMS = (*CONFIGS, *BASELINES)
-NAMES = {"direct": "Direct", "planning": "Planning", "lookahead": "Look-ahead", "zeroshot": "Qwen zero-shot",
-         "blenderbot": "BlenderBot-small", "reference": "Reference"}
+NAMES = {
+    "direct": "Direct",
+    "planning": "Planning",
+    "lookahead": "Look-ahead",
+    "zeroshot": "Qwen zero-shot",
+    "blenderbot": "BlenderBot-small",
+    "reference": "Reference",
+}
 SUBSETS = {"all": "all test rows", "after_seeker": "rows whose history ends with a seeker message"}
 
 
@@ -46,18 +61,20 @@ def words(text: str) -> list[str]:
 
 def distinct(texts: list[str], n: int) -> float:
     """Distinct n-grams over all n-grams in texts (corpus level)."""
-    grams = [tuple(w[i: i + n]) for w in map(words, texts) for i in range(len(w) - n + 1)]
+    grams = [tuple(w[i : i + n]) for w in map(words, texts) for i in range(len(w) - n + 1)]
     return len(set(grams)) / len(grams) if grams else 0.0
 
 
 def bleu(replies: list[str], references: list[str], order: int):
     from sacrebleu.metrics import BLEU
+
     metric = BLEU(max_ngram_order=order, **BLEU_SETTINGS)
     return metric.corpus_score(replies, [references]).score, str(metric.get_signature())
 
 
 def rouge_l(replies: list[str], references: list[str]) -> float:
     from rouge_score import rouge_scorer
+
     scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
     return mean(scorer.score(ref, reply)["rougeL"].fmeasure for reply, ref in zip(replies, references))
 
@@ -66,8 +83,10 @@ def bert_scorer(model: str, layer: int, rescale: bool = True, batch_size: int = 
     """(score function: (replies, references) -> F1 per pair, hash naming the model, layer and rescaling)."""
     from bert_score import BERTScorer
     from transformers import AutoTokenizer
-    scorer = BERTScorer(model_type=model, num_layers=layer, lang="en", rescale_with_baseline=rescale,
-                        batch_size=batch_size)
+
+    scorer = BERTScorer(
+        model_type=model, num_layers=layer, lang="en", rescale_with_baseline=rescale, batch_size=batch_size
+    )
     if getattr(scorer._tokenizer, "add_prefix_space", None) is False:
         # bert-score 0.3.13 asks for a leading space on every call, which transformers 5 ignores
         scorer._tokenizer = AutoTokenizer.from_pretrained(model, add_prefix_space=True)
@@ -87,15 +106,20 @@ def score_rows(rows: list[dict]) -> dict:
         "distinct1": 100 * distinct(replies, 1),
         "distinct2": 100 * distinct(replies, 2),
         "length": mean(len(words(x)) for x in replies),
-        "strategy_acc": (100 * mean(r["strategy"] == r["reference_strategy"] for r in with_strategy)
-                         if with_strategy else None),
+        "strategy_acc": (
+            100 * mean(r["strategy"] == r["reference_strategy"] for r in with_strategy) if with_strategy else None
+        ),
     }
 
 
 def reference_row(rows: list[dict]) -> dict:
     refs = [r["reference"] for r in rows]
-    return {"n": len(rows), "distinct1": 100 * distinct(refs, 1), "distinct2": 100 * distinct(refs, 2),
-            "length": mean(len(words(x)) for x in refs)}
+    return {
+        "n": len(rows),
+        "distinct1": 100 * distinct(refs, 1),
+        "distinct2": 100 * distinct(refs, 2),
+        "length": mean(len(words(x)) for x in refs),
+    }
 
 
 def load_outputs(folder: Path, configs=SYSTEMS) -> dict[str, list[dict]]:
@@ -127,12 +151,14 @@ def evaluate(data: dict[str, list[dict]], bertscore=None) -> list[dict]:
         for config, rows in data.items():
             rows, kept = subset_rows(rows, subset)
             if kept:
-                results.append({"config": config, "subset": subset, "bypassed": len(rows) - len(kept),
-                                **score_rows(kept)})
+                results.append(
+                    {"config": config, "subset": subset, "bypassed": len(rows) - len(kept), **score_rows(kept)}
+                )
         rows, kept = subset_rows(next(iter(data.values())), subset)  # every configuration shares the references
         if kept:
-            results.append({"config": "reference", "subset": subset, "bypassed": len(rows) - len(kept),
-                            **reference_row(kept)})
+            results.append(
+                {"config": "reference", "subset": subset, "bypassed": len(rows) - len(kept), **reference_row(kept)}
+            )
     return results
 
 
@@ -143,25 +169,42 @@ def fmt(value) -> str:
 def latex(results: list[dict], subset: str, bertscore_note: str) -> str:
     rows = [r for r in results if r["subset"] == subset]
     n = rows[0]["n"] if rows else 0
-    lines = [r"\begin{table}[t]", r"\centering", r"\small", r"\begin{tabular}{l" + "r" * len(COLUMNS) + "}",
-             r"\toprule", "Configuration & " + " & ".join(h for _, h in COLUMNS) + r" \\", r"\midrule"]
+    lines = [
+        r"\begin{table}[t]",
+        r"\centering",
+        r"\small",
+        r"\begin{tabular}{l" + "r" * len(COLUMNS) + "}",
+        r"\toprule",
+        "Configuration & " + " & ".join(h for _, h in COLUMNS) + r" \\",
+        r"\midrule",
+    ]
     for r in rows:
         if r["config"] == "reference":
             lines.append(r"\midrule")
-        lines.append(NAMES.get(r["config"], r["config"]) + " & "
-                     + " & ".join(fmt(r.get(k)) for k, _ in COLUMNS) + r" \\")
-    lines += [r"\bottomrule", r"\end{tabular}",
-              rf"\caption{{Reference-based metrics on the ESConv test split, {SUBSETS[subset]} ({n} replies per "
-              rf"configuration). {bertscore_note}}}",
-              rf"\label{{tab:metrics-{subset.replace('_', '-')}}}", r"\end{table}"]
+        lines.append(
+            NAMES.get(r["config"], r["config"]) + " & " + " & ".join(fmt(r.get(k)) for k, _ in COLUMNS) + r" \\"
+        )
+    lines += [
+        r"\bottomrule",
+        r"\end{tabular}",
+        rf"\caption{{Reference-based metrics on the ESConv test split, {SUBSETS[subset]} ({n} replies per "
+        rf"configuration). {bertscore_note}}}",
+        rf"\label{{tab:metrics-{subset.replace('_', '-')}}}",
+        r"\end{table}",
+    ]
     return "\n".join(lines) + "\n"
 
 
 def main():
     ap = argparse.ArgumentParser(description="Reference-based metrics for each configuration.")
     ap.add_argument("--outputs", type=Path, default=ROOT / "data/outputs")
-    ap.add_argument("--configs", nargs="+", choices=SYSTEMS, default=list(SYSTEMS),
-                    help="systems to score; those without an output file are skipped")
+    ap.add_argument(
+        "--configs",
+        nargs="+",
+        choices=SYSTEMS,
+        default=list(SYSTEMS),
+        help="systems to score; those without an output file are skipped",
+    )
     ap.add_argument("--bertscore-model", default="roberta-large")
     ap.add_argument("--bertscore-layer", type=int, default=17)
     ap.add_argument("--no-rescale", action="store_true", help="raw BERTScore instead of baseline-rescaled")
@@ -171,34 +214,43 @@ def main():
     data = load_outputs(args.outputs, args.configs)
     bertscore, bertscore_hash = None, None
     if not args.no_bertscore:
-        bertscore, bertscore_hash = bert_scorer(args.bertscore_model, args.bertscore_layer, not args.no_rescale,
-                                                args.batch_size)
+        bertscore, bertscore_hash = bert_scorer(
+            args.bertscore_model, args.bertscore_layer, not args.no_rescale, args.batch_size
+        )
     results = evaluate(data, bertscore)
     settings = {
         "bleu": bleu(["a reply"], ["a reference"], 4)[1],  # sacrebleu signs a metric only after scoring
         "rouge": "rougeL F-measure, rouge-score " + version("rouge-score") + ", no stemming",
-        "bertscore": None if bertscore is None else {
-            "model": args.bertscore_model, "layer": args.bertscore_layer, "rescaled": not args.no_rescale,
-            "hash": bertscore_hash},
+        "bertscore": None
+        if bertscore is None
+        else {
+            "model": args.bertscore_model,
+            "layer": args.bertscore_layer,
+            "rescaled": not args.no_rescale,
+            "hash": bertscore_hash,
+        },
         "words": WORD.pattern,
         "bypassed_rows": "left out of every metric",
     }
-    note = ("BERTScore not computed." if bertscore is None else
-            f"BERTScore F1: {args.bertscore_model}, layer {args.bertscore_layer}"
-            + ("" if args.no_rescale else ", rescaled with the baseline") + ".")
+    note = (
+        "BERTScore not computed."
+        if bertscore is None
+        else f"BERTScore F1: {args.bertscore_model}, layer {args.bertscore_layer}"
+        + ("" if args.no_rescale else ", rescaled with the baseline")
+        + "."
+    )
     with open(args.outputs / "metrics.csv", "w", encoding="utf-8", newline="") as f:
         fields = ["config", "subset", "n", "bypassed"] + [k for k, _ in COLUMNS]
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for r in results:
             writer.writerow({k: round(v, 4) if isinstance(v, float) else v for k, v in r.items()})
-    (args.outputs / "metrics.tex").write_text("\n".join(latex(results, s, note) for s in SUBSETS),
-                                              encoding="utf-8")
-    (args.outputs / "metrics.json").write_text(json.dumps({"settings": settings, "results": results}, indent=1),
-                                               encoding="utf-8")
+    (args.outputs / "metrics.tex").write_text("\n".join(latex(results, s, note) for s in SUBSETS), encoding="utf-8")
+    (args.outputs / "metrics.json").write_text(
+        json.dumps({"settings": settings, "results": results}, indent=1), encoding="utf-8"
+    )
     for r in results:
-        print(f"{r['subset']:<13}{r['config']:<12}n={r['n']:<5}"
-              + " ".join(f"{k}={fmt(r.get(k))}" for k, _ in COLUMNS))
+        print(f"{r['subset']:<13}{r['config']:<12}n={r['n']:<5}" + " ".join(f"{k}={fmt(r.get(k))}" for k, _ in COLUMNS))
 
 
 if __name__ == "__main__":

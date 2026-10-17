@@ -14,6 +14,7 @@ its replies are detokenized and sentence-cased before scoring.
     python src/baselines.py generate --system blenderbot
     python src/metrics.py                               # scores every system that has an output file
 """
+
 import argparse
 import json
 import math
@@ -44,34 +45,46 @@ def detokenize(text: str) -> str:
 class BlenderBot:
     def __init__(self, checkpoint, device=None, max_source=512, max_reply=64):
         from transformers import AutoTokenizer, BlenderbotSmallForConditionalGeneration
+
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         self.tokenizer.truncation_side = "left"  # keep the latest turns
-        self.model = BlenderbotSmallForConditionalGeneration.from_pretrained(
-            checkpoint, dtype=torch.float32).to(self.device).eval()
+        self.model = (
+            BlenderbotSmallForConditionalGeneration.from_pretrained(checkpoint, dtype=torch.float32)
+            .to(self.device)
+            .eval()
+        )
         self.max_source, self.max_reply = max_source, max_reply
 
     @torch.inference_mode()
     def generate_batch(self, histories, batch_size=32):
         replies = []
         for start in range(0, len(histories), batch_size):
-            enc = self.tokenizer(histories[start: start + batch_size], truncation=True, max_length=self.max_source,
-                                 padding=True, return_tensors="pt").to(self.device)
-            out = self.model.generate(**enc, do_sample=False, num_beams=1, min_length=0,
-                                      max_new_tokens=self.max_reply, no_repeat_ngram_size=3)
+            enc = self.tokenizer(
+                histories[start : start + batch_size],
+                truncation=True,
+                max_length=self.max_source,
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
+            out = self.model.generate(
+                **enc, do_sample=False, num_beams=1, min_length=0, max_new_tokens=self.max_reply, no_repeat_ngram_size=3
+            )
             replies += [detokenize(t) for t in self.tokenizer.batch_decode(out, skip_special_tokens=True)]
         return replies
 
 
 def seq2seq_batches(rows, tokenizer, batch_size, max_source, max_reply, shuffle=False):
     def collate(batch):
-        enc = tokenizer([r["text"] for r in batch], truncation=True, max_length=max_source, padding=True,
-                        return_tensors="pt")
+        enc = tokenizer(
+            [r["text"] for r in batch], truncation=True, max_length=max_source, padding=True, return_tensors="pt"
+        )
         # the tokenizer adds no end token, and the model must learn to stop; long replies keep their start
         targets = [tokenizer(r["response"]).input_ids[: max_reply - 1] + [tokenizer.eos_token_id] for r in batch]
         width = max(map(len, targets))
         enc["labels"] = torch.tensor([t + [-100] * (width - len(t)) for t in targets])
         return enc
+
     return DataLoader(rows, batch_size=batch_size, shuffle=shuffle, collate_fn=collate)
 
 
@@ -89,8 +102,8 @@ def mean_loss(model, batches, device) -> float:
 
 
 def train_blenderbot(args):
-    from transformers import (AutoTokenizer, BlenderbotSmallForConditionalGeneration,
-                              get_linear_schedule_with_warmup)
+    from transformers import AutoTokenizer, BlenderbotSmallForConditionalGeneration, get_linear_schedule_with_warmup
+
     if (args.output / "config.json").exists():
         raise ValueError(f"{args.output} already holds a model; choose a new --output")
     random.seed(args.seed)
@@ -102,8 +115,10 @@ def train_blenderbot(args):
     data = {s: read_jsonl(args.data / f"responses_{s}.jsonl") for s in ("train", "val", "test")}
     if args.smoke:
         data = {s: rows[:32] for s, rows in data.items()}
-    batches = {s: seq2seq_batches(rows, tokenizer, args.batch_size, args.max_source, args.max_reply, s == "train")
-               for s, rows in data.items()}
+    batches = {
+        s: seq2seq_batches(rows, tokenizer, args.batch_size, args.max_source, args.max_reply, s == "train")
+        for s, rows in data.items()
+    }
     epochs = 1 if args.smoke else args.epochs
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     schedule = get_linear_schedule_with_warmup(optimizer, args.warmup, epochs * len(batches["train"]))
@@ -121,8 +136,14 @@ def train_blenderbot(args):
             schedule.step()
             optimizer.zero_grad()
         val = mean_loss(model, batches["val"], device)
-        history.append({"epoch": epoch, "val_loss": round(val, 4), "val_ppl": round(math.exp(val), 2),
-                        "minutes": round((time.time() - t0) / 60, 1)})
+        history.append(
+            {
+                "epoch": epoch,
+                "val_loss": round(val, 4),
+                "val_ppl": round(math.exp(val), 2),
+                "minutes": round((time.time() - t0) / 60, 1),
+            }
+        )
         print(json.dumps(history[-1]), flush=True)
         if val < best:
             best = val
@@ -130,11 +151,16 @@ def train_blenderbot(args):
             tokenizer.save_pretrained(args.output)
     model = BlenderbotSmallForConditionalGeneration.from_pretrained(args.output, dtype=torch.float32).to(device)
     test = mean_loss(model, batches["test"], device)
-    run = {"config": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items() if k != "func"},
-           "base_model": BLENDERBOT, "device": device, "validation": history,
-           "best_epoch": min(history, key=lambda h: h["val_loss"])["epoch"],
-           "test_loss": round(test, 4), "test_ppl": round(math.exp(test), 2),
-           "note": "perplexity over BlenderBot-small tokens; not comparable with Qwen perplexity"}
+    run = {
+        "config": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items() if k != "func"},
+        "base_model": BLENDERBOT,
+        "device": device,
+        "validation": history,
+        "best_epoch": min(history, key=lambda h: h["val_loss"])["epoch"],
+        "test_loss": round(test, 4),
+        "test_ppl": round(math.exp(test), 2),
+        "note": "perplexity over BlenderBot-small tokens; not comparable with Qwen perplexity",
+    }
     (args.output / "run.json").write_text(json.dumps(run, indent=1), encoding="utf-8")
     reply = BlenderBot(args.output, device).generate_batch(["seeker: I am worried about my exams."])[0]
     print(json.dumps({"test_ppl": run["test_ppl"], "best_epoch": run["best_epoch"], "reload_reply": reply}), flush=True)
@@ -142,15 +168,20 @@ def train_blenderbot(args):
 
 def generate(args):
     reference = read_jsonl(args.outputs / "direct.jsonl")
-    histories = {(r["dialogue_id"], r["utterance_idx"]): r["text"] for r in read_jsonl(args.data / "responses_test.jsonl")}
+    histories = {
+        (r["dialogue_id"], r["utterance_idx"]): r["text"] for r in read_jsonl(args.data / "responses_test.jsonl")
+    }
     todo = [r for r in reference if not r["bypassed"]][: args.limit]
     if args.system == "zeroshot":
         from speak import Speaker
-        replies = Speaker(None).generate_batch([histories[(r["dialogue_id"], r["utterance_idx"])] for r in todo],
-                                               batch_size=args.batch_size)
+
+        replies = Speaker(None).generate_batch(
+            [histories[(r["dialogue_id"], r["utterance_idx"])] for r in todo], batch_size=args.batch_size
+        )
     else:
         replies = BlenderBot(args.checkpoint).generate_batch(
-            [histories[(r["dialogue_id"], r["utterance_idx"])] for r in todo], batch_size=args.batch_size)
+            [histories[(r["dialogue_id"], r["utterance_idx"])] for r in todo], batch_size=args.batch_size
+        )
     written = dict(zip(((r["dialogue_id"], r["utterance_idx"]) for r in todo), replies))
     private_dir(args.outputs)
     keep = ("dialogue_id", "utterance_idx", "problem", "emotion", "after_seeker", "reference", "reference_strategy")
@@ -159,12 +190,23 @@ def generate(args):
             key = (r["dialogue_id"], r["utterance_idx"])
             if not r["bypassed"] and key not in written:  # --limit
                 continue
-            row = {**{k: r[k] for k in keep}, "config": args.system, "reply": written.get(key, r["reply"]),
-                   "bypassed": r["bypassed"], "strategy": None, "perceived": None, "planner": None,
-                   "candidates": [], "selected": None}
+            row = {
+                **{k: r[k] for k in keep},
+                "config": args.system,
+                "reply": written.get(key, r["reply"]),
+                "bypassed": r["bypassed"],
+                "strategy": None,
+                "perceived": None,
+                "planner": None,
+                "candidates": [],
+                "selected": None,
+            }
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    print(json.dumps({"system": args.system, "replies": len(written),
-                      "bypassed_copied": sum(r["bypassed"] for r in reference)}))
+    print(
+        json.dumps(
+            {"system": args.system, "replies": len(written), "bypassed_copied": sum(r["bypassed"] for r in reference)}
+        )
+    )
 
 
 def main():

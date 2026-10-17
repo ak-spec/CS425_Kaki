@@ -7,6 +7,7 @@ From the repository root:
 
 The conversation is kept in st.session_state only. Messages are never written to disk or logged.
 """
+
 import argparse
 import gc
 import json
@@ -24,9 +25,11 @@ if SRC not in sys.path:  # Streamlit reruns this file on every interaction
     sys.path.insert(0, SRC)
 from pipeline import CONFIGS, Kaki
 
-NOTICE = ("Kaki is a university research prototype (SMU CS425). It is not therapy or a counselling service, and "
-          "it is not a reliable crisis detector. If you are in danger, call 995. To talk to someone, call "
-          "Samaritans of Singapore at 1767 or national mindline at 1771 (both 24 hours).")
+NOTICE = (
+    "Kaki is a university research prototype (SMU CS425). It is not therapy or a counselling service, and "
+    "it is not a reliable crisis detector. If you are in danger, call 995. To talk to someone, call "
+    "Samaritans of Singapore at 1767 or national mindline at 1771 (both 24 hours)."
+)
 CONFIG_NOTES = {
     "direct": "one reply from the history-only Speak adapter",
     "planning": "one reply for the planner's top strategy",
@@ -35,15 +38,28 @@ CONFIG_NOTES = {
 TRIGGERS = {"model": "classifier score", "lexicon": "lexicon match and the lower threshold"}
 
 EMOTIONS = ["anger", "anxiety", "depression", "disgust", "fear", "sadness", "shame", "other"]
-PROBLEMS = ["academic pressure", "breakup with partner", "conflict with parents", "job crisis",
-            "ongoing depression", "problems with friends", "sleep problems", "other"]
+PROBLEMS = [
+    "academic pressure",
+    "breakup with partner",
+    "conflict with parents",
+    "job crisis",
+    "ongoing depression",
+    "problems with friends",
+    "sleep problems",
+    "other",
+]
 TOPICS = [  # (word prefixes in the history, emotion, problem) for the fake Perceive
     (("exam", "midterm", "module", "assignment", "grade", "gpa"), "anxiety", "academic pressure"),
     (("friend", "lonely", "left out"), "sadness", "problems with friends"),
     (("parent", "mum", "mom", "dad"), "anger", "conflict with parents"),
 ]
-RISK_PHRASES = {"kill myself": "suicidal_intent", "end my life": "suicidal_intent", "suicidal": "suicidal_intent",
-                "want to die": "suicidal_intent", "hurt myself": "self_harm"}
+RISK_PHRASES = {
+    "kill myself": "suicidal_intent",
+    "end my life": "suicidal_intent",
+    "suicidal": "suicidal_intent",
+    "want to die": "suicidal_intent",
+    "hurt myself": "self_harm",
+}
 FIRST_PLAN = [("Question", 0.41), ("Reflection of feelings", 0.22), ("Restatement or Paraphrasing", 0.12)]
 LATER_PLAN = [("Affirmation and Reassurance", 0.33), ("Providing Suggestions", 0.26), ("Reflection of feelings", 0.17)]
 REPLIES = {
@@ -64,6 +80,7 @@ def spread(labels: list[str], top: str, p: float = 0.6) -> dict:
 
 class FakeGuard:
     """Flags a few explicit phrases in the latest seeker message; the prepared response is the real one."""
+
     thresholds = {"model": 0.5, "lexicon": 0.2}
 
     def __init__(self):
@@ -71,13 +88,21 @@ class FakeGuard:
 
     def check(self, turns: list[dict]) -> dict:
         text = [t["text"] for t in turns if t["speaker"] == "seeker"][-1].lower()
-        matches = [{"category": category, "term": phrase, "negated": False, "quoted": False}
-                   for phrase, category in RISK_PHRASES.items() if phrase in text]
+        matches = [
+            {"category": category, "term": phrase, "negated": False, "quoted": False}
+            for phrase, category in RISK_PHRASES.items()
+            if phrase in text
+        ]
         risk = bool(matches)
-        return {"risk_flag": risk, "model_score": 0.97 if risk else 0.03,
-                "predicted_label": "risk" if risk else "no_risk", "lexicon_matches": matches,
-                "bypass_generation": risk, "response_key": "crisis_sg" if risk else None,
-                "trigger": "model" if risk else None}
+        return {
+            "risk_flag": risk,
+            "model_score": 0.97 if risk else 0.03,
+            "predicted_label": "risk" if risk else "no_risk",
+            "lexicon_matches": matches,
+            "bypass_generation": risk,
+            "response_key": "crisis_sg" if risk else None,
+            "trigger": "model" if risk else None,
+        }
 
     def response(self, key: str) -> str:
         return self.responses[key]["text"]
@@ -86,10 +111,15 @@ class FakeGuard:
 class FakePerceiver:
     def predict(self, history: str) -> dict:
         text = history.lower()
-        emotion, problem = next(((e, p) for words, e, p in TOPICS
-                                 if any(re.search(rf"\b{w}", text) for w in words)), ("sadness", "other"))
-        return {"emotion": emotion, "emotion_probs": spread(EMOTIONS, emotion),
-                "problem": problem, "problem_probs": spread(PROBLEMS, problem)}
+        emotion, problem = next(
+            ((e, p) for words, e, p in TOPICS if any(re.search(rf"\b{w}", text) for w in words)), ("sadness", "other")
+        )
+        return {
+            "emotion": emotion,
+            "emotion_probs": spread(EMOTIONS, emotion),
+            "problem": problem,
+            "problem_probs": spread(PROBLEMS, problem),
+        }
 
 
 class FakePlanner:
@@ -103,8 +133,14 @@ class FakeSpeaker:
         return REPLIES[strategy]
 
     def generate_candidates(self, history: str, emotion: str, strategies: list[dict]) -> list[dict]:
-        return [{"strategy": s["strategy"], "planner_probability": s["probability"],
-                 "response": self.generate(history, emotion, s["strategy"])} for s in strategies]
+        return [
+            {
+                "strategy": s["strategy"],
+                "planner_probability": s["probability"],
+                "response": self.generate(history, emotion, s["strategy"]),
+            }
+            for s in strategies
+        ]
 
 
 def fake_kaki() -> Kaki:
@@ -168,8 +204,11 @@ def show_reply(result: dict):
 
 def probability_table(label: str, probs: dict):
     rows = [{label: k, "Probability": v} for k, v in sorted(probs.items(), key=lambda kv: -kv[1])]
-    st.dataframe(rows, hide_index=True, column_config={
-        "Probability": st.column_config.ProgressColumn(format="%.2f", min_value=0.0, max_value=1.0)})
+    st.dataframe(
+        rows,
+        hide_index=True,
+        column_config={"Probability": st.column_config.ProgressColumn(format="%.2f", min_value=0.0, max_value=1.0)},
+    )
 
 
 def show_guard(guard: dict, thresholds):
@@ -181,11 +220,18 @@ def show_guard(guard: dict, thresholds):
     left.metric("Risk score", f"{guard['model_score']:.2f}")
     right.metric("Classifier alone", guard["predicted_label"])
     if thresholds:
-        st.caption(f"Flags at a score of {thresholds['model']:.2f}, or {thresholds['lexicon']:.2f} with an affirmed "
-                   "lexicon match (neither negated nor quoted).")
+        st.caption(
+            f"Flags at a score of {thresholds['model']:.2f}, or {thresholds['lexicon']:.2f} with an affirmed "
+            "lexicon match (neither negated nor quoted)."
+        )
     if guard["lexicon_matches"]:
-        st.dataframe([{"Lexicon match": m["term"], "Category": m["category"], "Negated": m["negated"],
-                       "Quoted": m["quoted"]} for m in guard["lexicon_matches"]], hide_index=True)
+        st.dataframe(
+            [
+                {"Lexicon match": m["term"], "Category": m["category"], "Negated": m["negated"], "Quoted": m["quoted"]}
+                for m in guard["lexicon_matches"]
+            ],
+            hide_index=True,
+        )
     else:
         st.caption("No lexicon matches.")
 
@@ -212,15 +258,19 @@ def show_decision(result: dict, thresholds):
     st.markdown("##### Guard")
     show_guard(out["guard"], thresholds)
     if out["bypassed"]:
-        st.caption(f"Kaki replied with Guard's prepared response ({out['guard']['response_key']} in "
-                   "configs/guard.json), shown in the chat. Perceive, Plan, Speak and Critique did not run for "
-                   "this message.")
+        st.caption(
+            f"Kaki replied with Guard's prepared response ({out['guard']['response_key']} in "
+            "configs/guard.json), shown in the chat. Perceive, Plan, Speak and Critique did not run for "
+            "this message."
+        )
         return
 
     st.markdown("##### Perceive")
     p = out["perceive"]
-    st.markdown(f"Emotion **{p['emotion']}** ({p['emotion_probs'][p['emotion']]:.2f}), "
-                f"problem **{p['problem']}** ({p['problem_probs'][p['problem']]:.2f})")
+    st.markdown(
+        f"Emotion **{p['emotion']}** ({p['emotion_probs'][p['emotion']]:.2f}), "
+        f"problem **{p['problem']}** ({p['problem_probs'][p['problem']]:.2f})"
+    )
     emotion_tab, problem_tab = st.tabs(["All emotions", "All problems"])
     with emotion_tab:
         probability_table("Emotion", p["emotion_probs"])
@@ -252,13 +302,20 @@ def main():
         state.turns, state.results = [], []
 
     with st.sidebar:
-        config = st.radio("Configuration", CONFIGS, index=CONFIGS.index("lookahead"), key="config",
-                          captions=[CONFIG_NOTES[c] for c in CONFIGS])
+        config = st.radio(
+            "Configuration",
+            CONFIGS,
+            index=CONFIGS.index("lookahead"),
+            key="config",
+            captions=[CONFIG_NOTES[c] for c in CONFIGS],
+        )
         if st.button("Clear conversation"):
             state.turns, state.results = [], []
         st.caption("Fake mode: canned outputs, no models." if args.fake else f"Models from {args.checkpoints}")
-        st.caption("The conversation exists only in this browser session's memory. It is never saved, and it is "
-                   "gone when you clear it, reload the page or close the tab.")
+        st.caption(
+            "The conversation exists only in this browser session's memory. It is never saved, and it is "
+            "gone when you clear it, reload the page or close the tab."
+        )
 
     st.title("Kaki")
     st.caption("Guard -> Perceive -> Plan -> Speak -> Critique")
@@ -269,9 +326,11 @@ def main():
     else:
         missing = missing_files(args.checkpoints, config)
         if missing:
-            st.error(f"The {config} configuration needs files that are not there: "
-                     + ", ".join(str(p) for p in missing)
-                     + ". Run with --fake to try the interface without models (docs/demo.md).")
+            st.error(
+                f"The {config} configuration needs files that are not there: "
+                + ", ".join(str(p) for p in missing)
+                + ". Run with --fake to try the interface without models (docs/demo.md)."
+            )
             st.stop()
         wanted = model_set(config)
         if state.get("loaded") not in (None, wanted):
@@ -304,8 +363,10 @@ def main():
     with panel:
         st.subheader("How Kaki decided")
         if not state.results:
-            st.caption("Send a message to see Guard's decision, the perceived emotion and problem, the planned "
-                       "strategies and the candidate replies.")
+            st.caption(
+                "Send a message to see Guard's decision, the perceived emotion and problem, the planned "
+                "strategies and the candidate replies."
+            )
         else:
             n = len(state.results)
             i = n - 1

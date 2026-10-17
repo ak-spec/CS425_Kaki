@@ -14,6 +14,7 @@ Usage, from the repository root with src on the import path:
 
 See docs/guard.md for score interpretation, threshold selection and known limits.
 """
+
 import json
 import logging
 import re
@@ -66,12 +67,16 @@ PATTERNS = [(cat, re.compile(p)) for cat, ps in LEXICON.items() for p in ps]
 
 NEGATION = re.compile(r"\b(?:not|never|no|don'?t|do not|didn'?t|won'?t|wouldn'?t|can'?t|cannot|isn'?t|wasn'?t)\b")
 # cues that look like negation but do not negate what follows
-PSEUDO_NEGATION = re.compile(r"\b(?:no one|nothing but|not gonna lie|not going to lie|"
-                             r"(?:can'?t|cannot|couldn'?t) (?:stop|help)|not sure (?:if|whether)|"
-                             r"don'?t know (?:if|whether|why|how))\b")
+PSEUDO_NEGATION = re.compile(
+    r"\b(?:no one|nothing but|not gonna lie|not going to lie|"
+    r"(?:can'?t|cannot|couldn'?t) (?:stop|help)|not sure (?:if|whether)|"
+    r"don'?t know (?:if|whether|why|how))\b"
+)
 # someone else's words: "my friend said ...", "he told me to ...", song lyrics
-REPORTED = re.compile(r"\b(?:(?:he|she|they|someone|somebody|people|my \w+) (?:said|says|told me|tells me|"
-                      r"wrote|texted|joked)|told me to|tells me to|lyrics?|song)\b")
+REPORTED = re.compile(
+    r"\b(?:(?:he|she|they|someone|somebody|people|my \w+) (?:said|says|told me|tells me|"
+    r"wrote|texted|joked)|told me to|tells me to|lyrics?|song)\b"
+)
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|‘[^’]*’|(?<!\w)'(?:[^']|'(?=\w))+'(?!\w)")
 CLAUSE_BREAK = re.compile(r"[.!?;:,\n]|\bbut\b|\bthough\b|\bhowever\b")
 NEGATION_WINDOW = 5  # words before the match
@@ -92,15 +97,17 @@ def match_lexicon(text: str) -> list[dict]:
                 continue
             seen.add(m.span())
             breaks = [b.end() for b in CLAUSE_BREAK.finditer(text, 0, m.start())]
-            clause = text[breaks[-1] if breaks else 0: m.start()]
+            clause = text[breaks[-1] if breaks else 0 : m.start()]
             window = PSEUDO_NEGATION.sub(" ", " ".join(clause.split()[-NEGATION_WINDOW:]))
-            matches.append({
-                "category": category,
-                "term": m.group(),
-                "negated": bool(NEGATION.search(window)),
-                "quoted": any(s <= m.start() and m.end() <= e for s, e in quoted_spans)
-                          or bool(REPORTED.search(clause)),
-            })
+            matches.append(
+                {
+                    "category": category,
+                    "term": m.group(),
+                    "negated": bool(NEGATION.search(window)),
+                    "quoted": any(s <= m.start() and m.end() <= e for s, e in quoted_spans)
+                    or bool(REPORTED.search(clause)),
+                }
+            )
     return matches
 
 
@@ -153,9 +160,10 @@ def risk_scores(model, tokenizer, texts: list[str], max_len: int, batch_size: in
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # similar lengths -> less padding
     scores = [0.0] * len(texts)
     for start in range(0, len(order), batch_size):
-        idx = order[start: start + batch_size]
-        enc = tokenizer([texts[i] for i in idx], truncation=True, max_length=max_len,
-                        padding=True, return_tensors="pt").to(device)
+        idx = order[start : start + batch_size]
+        enc = tokenizer(
+            [texts[i] for i in idx], truncation=True, max_length=max_len, padding=True, return_tensors="pt"
+        ).to(device)
         probs = model(**enc).logits.float().softmax(-1)[:, model.config.label2id["risk"]]
         for i, p in zip(idx, probs.tolist()):
             scores[i] = p
@@ -187,8 +195,12 @@ class Guard:
         for r in results:
             if r["bypass_generation"]:
                 # message text is not logged: session history stays in memory only
-                log.warning("guard bypass: trigger=%s score=%.3f lexicon=%s", r["trigger"], r["model_score"],
-                            sorted({m["category"] for m in r["lexicon_matches"]}))
+                log.warning(
+                    "guard bypass: trigger=%s score=%.3f lexicon=%s",
+                    r["trigger"],
+                    r["model_score"],
+                    sorted({m["category"] for m in r["lexicon_matches"]}),
+                )
         return results
 
     def response(self, key: str) -> str:
