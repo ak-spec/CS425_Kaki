@@ -4,10 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 
-# data (ESConv is academic-use only; regenerate with src/prep.py) and run outputs
-data/raw/
-data/processed/
-data/outputs/
-data/human_eval/
+# generated: data (ESConv is for academic use only; the preparation scripts download it again) and models
+data/
 checkpoints/
 *.pt
