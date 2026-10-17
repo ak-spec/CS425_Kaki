@@ -29,7 +29,7 @@ Data: [ESConv](https://huggingface.co/datasets/thu-coai/esconv) (Liu et al., ACL
 | Speak (`src/speak.py`, `src/train_speak.py`) | both adapters trained (see `docs/speak.md`) |
 | Critique (`src/critic.py`, `src/train_critic.py`) | reply-contrast Critic and Eval-Critic trained; look-ahead weight chosen on validation (see `docs/critic.md`) |
 | Pipeline (`src/pipeline.py`) | all stages connected; the Critic chooses among the top three candidates |
-| Evaluation (`src/select_eval_contexts.py`, `src/generate_outputs.py`, `src/metrics.py`, `src/compare_configs.py`, `src/human_eval_sheet.py`) | test comparison done (see `docs/results.md`); human ratings pending |
+| Evaluation (`src/select_eval_contexts.py`, `src/generate_outputs.py`, `src/metrics.py`, `src/compare_configs.py`, `src/human_eval_sheet.py`) | test comparison and blind human evaluation done (see `docs/results.md`) |
 | Baselines, controllability, simulator, speed (`src/baselines.py`, `src/controllability.py`, `src/simulate.py`, `src/benchmark.py`) | done (see `docs/results.md`) |
 | Guard red-team probes (`src/guard_probes.py`) | done (see `docs/guard.md`) |
 | Demo (`app.py`) | built and checked with stand-in models; laptop run with real checkpoints pending (see `docs/demo.md`) |

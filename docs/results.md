@@ -236,6 +236,46 @@ configurations its order matches the other measures (look-ahead, planning, direc
 reliable (direct - look-ahead -0.06 [-0.13, +0.01]), and it rates the human replies above look-ahead
 (-0.09 [-0.17, -0.00]).
 
+## Human evaluation
+
+Two team members who had not seen any output, Kannappan Annamalai and Yong Huey, rated the 76 distinct
+replies blind (`docs/evaluation.md`): 20 test contexts and 5 handwritten Singlish messages, answered by
+direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. One cell was left blank
+and is excluded (`score --allow-missing`). Mean over both raters:
+
+| System | Relevance | Acknowledgement | Helpfulness | Fluency | Safety | Mean of five |
+|---|---|---|---|---|---|---|
+| Direct | 3.28 | 2.76 | 2.90 | 4.32 | 3.78 | 3.41 |
+| Planning | 2.86 | 2.36 | 2.76 | 4.20 | 3.48 | 3.13 |
+| Look-ahead | 2.84 | 2.32 | 2.72 | 4.20 | 3.42 | 3.10 |
+| BlenderBot-small | 3.24 | 2.72 | 2.78 | 3.76 | 3.66 | 3.23 |
+| Krippendorff's alpha (ordinal) | 0.43 | 0.13 | 0.04 | 0.01 | 0.18 | |
+
+Paired over contexts (mean of the five criteria, 95% bootstrap interval): direct - planning +0.28
+[+0.03, +0.51], direct - look-ahead +0.31 [+0.12, +0.52], look-ahead - planning -0.03 [-0.20, +0.12];
+BlenderBot-small cannot be told apart from any Kaki configuration. On relevance alone, direct leads planning
+by 0.42 [0.04, 0.82] and look-ahead by 0.44 [0.12, 0.76].
+
+The raters agree only weakly: alpha is 0.43 for relevance and below 0.2 for the other criteria, under the
+0.667 usually needed for even tentative conclusions, and 77 of 379 rating pairs differ by two or more
+points. The ranking therefore rests on the means, not on agreement, and matches the reference metrics:
+planning and look-ahead do not beat direct generation, and the human evaluation favours direct slightly.
+
+On the test contexts the mean of five is direct 3.54, BlenderBot-small 3.20, look-ahead 3.15, planning
+3.11. On the five Singlish messages it is BlenderBot-small 3.38, planning 3.24, look-ahead 2.92, direct
+2.88; Guard flagged "My CCA leader always scold me in front of everyone... Thinking of quitting but scared
+people say I give up." in every Kaki configuration, and both raters gave the prepared crisis reply 1 for
+relevance there. Where Guard was right (a seeker crying every day and asking how to keep from harming
+themselves), the same reply was rated 4-5 on every criterion.
+
+The judge model's ratings correlate with the raters' mean about as well as the raters correlate with each
+other (Spearman, 60 replies on the test contexts): relevance 0.50 against 0.50, helpfulness 0.28 against
+0.30, fluency 0.21 against 0.25, safety 0.31 against 0.17, but acknowledgement -0.07 against 0.36.
+
+Realism of the simulated seekers: the raters labelled 20 opening messages as real or simulated with 65%
+and 45% accuracy (55% overall, chance is 50%), and called 55% of the simulated ones real. On these opening
+messages the simulated seekers could not be told apart from ESConv's.
+
 ## Stage results on test
 
 | Stage | Result | Details |
