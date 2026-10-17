@@ -238,11 +238,10 @@ reliable (direct - look-ahead -0.06 [-0.13, +0.01]), and it rates the human repl
 
 ## Human evaluation
 
-Two raters who had not seen any output, Kannappan Annamalai (a team member) and Denzyl (from outside
-the team), rated the 76 distinct
-replies blind (`docs/evaluation.md`): 20 test contexts and 5 handwritten Singlish messages, answered by
-direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. One cell was left blank
-and is excluded (`score --allow-missing`). Mean over both raters:
+Two raters who had not seen any output, Yong Huey (a team member) and Denzyl (from outside the team),
+rated the 76 distinct replies blind (`docs/evaluation.md`): 20 test contexts and 5 handwritten Singlish messages, answered by
+direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. The first rater left one cell
+blank and supplied the rating afterwards. Mean over both raters:
 
 | System | Relevance | Acknowledgement | Helpfulness | Fluency | Safety | Mean of five |
 |---|---|---|---|---|---|---|
@@ -250,7 +249,7 @@ and is excluded (`score --allow-missing`). Mean over both raters:
 | Planning | 2.86 | 2.36 | 2.76 | 4.20 | 3.48 | 3.13 |
 | Look-ahead | 2.84 | 2.32 | 2.72 | 4.20 | 3.42 | 3.10 |
 | BlenderBot-small | 3.24 | 2.72 | 2.78 | 3.76 | 3.66 | 3.23 |
-| Krippendorff's alpha (ordinal) | 0.43 | 0.13 | 0.04 | 0.01 | 0.18 | |
+| Krippendorff's alpha (ordinal) | 0.43 | 0.13 | 0.04 | 0.01 | 0.19 | |
 
 Paired over contexts (mean of the five criteria, 95% bootstrap interval): direct - planning +0.28
 [+0.03, +0.51], direct - look-ahead +0.31 [+0.12, +0.52], look-ahead - planning -0.03 [-0.20, +0.12];
@@ -258,7 +257,7 @@ BlenderBot-small cannot be told apart from any Kaki configuration. On relevance 
 by 0.42 [0.04, 0.82] and look-ahead by 0.44 [0.12, 0.76].
 
 The raters agree only weakly: alpha is 0.43 for relevance and below 0.2 for the other criteria, under the
-0.667 usually needed for even tentative conclusions, and 77 of 379 rating pairs differ by two or more
+0.667 usually needed for even tentative conclusions, and 77 of 380 rating pairs differ by two or more
 points. The ranking therefore rests on the means, not on agreement, and matches the reference metrics:
 planning and look-ahead do not beat direct generation, and the human evaluation favours direct slightly.
 
@@ -271,7 +270,7 @@ themselves), the same reply got 4 or 5 in nine of its ten ratings.
 
 The judge model's ratings correlate with the raters' mean about as well as the raters correlate with each
 other (Spearman, 60 replies on the test contexts): relevance 0.50 against 0.50, helpfulness 0.28 against
-0.30, fluency 0.21 against 0.25, safety 0.31 against 0.17, but acknowledgement -0.07 against 0.36.
+0.30, fluency 0.21 against 0.25, safety 0.30 against 0.18, but acknowledgement -0.07 against 0.36.
 
 Realism of the simulated seekers: the raters labelled 20 opening messages as real or simulated with 65%
 and 45% accuracy (55% overall, chance is 50%), and called 55% of the simulated ones real. On these opening
