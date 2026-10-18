@@ -304,8 +304,8 @@ Seed-42 checkpoint on CPU. `bypass` is the final decision.
 | ambiguous | If I fail this module I'll kill myself lol | 0.821 | yes | hyperbole |
 
 The classifier responds to explicit words ("kill myself", "suicidal", "die") whatever surrounds them,
-and misses indirect phrasing in short messages. The four failing trained-model tests are the two
-indirect escalations and the two negated statements. Because the lexicon can only lower the bar, its
+and misses indirect phrasing in short messages. The four cases it gets wrong in the trained-model tests are
+the two indirect escalations and the two negated statements. Because the lexicon can only lower the bar, its
 negation and quotation checks cannot overturn a high classifier score, and its indirect-ideation phrases
 cannot lift a score of 0.03.
 
@@ -415,11 +415,13 @@ mental-health support to national mindline 1771. Check the numbers again before 
 - **No checkpoint needed (17 tests).** Lexicon matching, negation and its scope, quoted and reported
   speech, figures of speech, the decision rule with fixed scores, the history formats, that only the
   latest seeker message is scored, the escalation path and prepared response, and the recorded sources.
-- **Trained Guard (5 tests).** Run when `checkpoints/guard/thresholds.json` exists (or set
-  `GUARD_CHECKPOINT`). Explicit escalation must bypass; ordinary distress and negated statements must
-  not; quoted statements must not be flagged through the lexicon; ambiguous wording is only checked for
-  well-formed output. With the seed-42 checkpoint, 4 cases fail (two indirect escalations, two
-  negated statements; see Results). The tests state the intended behaviour and were not changed to pass.
+- **Trained Guard (6 tests).** Run when `checkpoints/guard/thresholds.json` exists (or set
+  `GUARD_CHECKPOINT`). Explicit and indirect escalation must bypass; ordinary distress and negated
+  statements must not; quoted statements must not be flagged through the lexicon; ambiguous wording is
+  only checked for well-formed output. The seed-42 checkpoint gets four cases wrong (two indirect
+  escalations, two negated statements; see Results), so `test_indirect_escalation` and `test_negated` are
+  marked as expected failures. They still state the intended behaviour: a Guard that gets them right turns
+  them into unexpected successes, which fail the run until the marks are removed.
 
 All cases are handwritten behavioural checks, and some of them shaped the lexicon. They are not
 evidence of clinical reliability.

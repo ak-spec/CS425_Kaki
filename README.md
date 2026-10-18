@@ -65,8 +65,8 @@ python src/pipeline.py --config lookahead --show # the same in a terminal
 ```
 
 The first run also downloads Speak's base model, Qwen2.5-0.5B-Instruct (about 1 GB), from the Hugging Face
-Hub. With the trained Guard in place, four Guard tests fail by design: they state the behaviour we want on
-indirect and negated messages, which the classifier does not reach yet (`docs/guard.md`).
+Hub. With the trained Guard in place, two Guard tests are expected failures: they state the behaviour we
+want on indirect and negated messages, which the classifier does not reach yet (`docs/guard.md`).
 `docs/demo.md` lists the files each configuration needs and the expected speed.
 
 ## Reproduce everything
