@@ -22,7 +22,8 @@ explicit phrases ("kill myself", "end my life", "suicidal", "want to die", "hurt
 real prepared response from `configs/guard.json`. Perceive picks an emotion and problem from keywords, and
 Plan and Speak return fixed strategies and replies. None of it reflects the trained models.
 
-Real mode calls `Kaki.load(checkpoints, configs=[...])` for the chosen configuration. It needs:
+Real mode calls `Kaki.load(checkpoints, configs=[...])` for the chosen configuration.
+`python src/download_checkpoints.py` fetches every file below from the repository's v1.0 release. It needs:
 
 | Configuration | Files |
 |---|---|
@@ -35,9 +36,9 @@ If any are missing, the page lists them and stops. The first real run also downl
 (Perceive's tokenizer and configuration) and `Qwen/Qwen2.5-0.5B-Instruct` (Speak's base model, about 1 GB)
 from the Hugging Face Hub unless they are already cached.
 
-For look-ahead, `Kaki.load` uses `checkpoints/critic` when it holds a `lookahead.json`. Copy the
-reply-contrast Critic there (on the cluster it is `checkpoints/critic-contrast`, whose `lookahead.json`
-holds the weight chosen on validation, 0; see [critic](critic.md)). Without it, look-ahead ranks its three
+For look-ahead, `Kaki.load` uses `checkpoints/critic` when it holds a `lookahead.json`. The release's
+`checkpoints/critic` is the reply-contrast Critic with the weight chosen on validation, 0 (see
+[critic](critic.md)); when training from scratch, copy `checkpoints/critic-contrast` there. Without it, look-ahead ranks its three
 candidates by planner probability and gives the planning reply.
 
 `tests/test_app.py` checks the fake Kaki's output against the pipeline's format and runs the page in fake

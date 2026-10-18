@@ -55,13 +55,18 @@ python -m unittest discover -s tests    # no downloads needed
 streamlit run app.py -- --fake          # the demo page with canned replies, no models
 ```
 
-With the trained models in `checkpoints/` (not in git; about 1.9 GB, shared separately):
+The trained models are in the [v1.0 release](https://github.com/ak-spec/CS425_Kaki/releases/tag/v1.0)
+(1.9 GB, not in git). No training is needed to run the real system:
 
 ```bash
+python src/download_checkpoints.py               # downloads, checks and unpacks them into checkpoints/
 streamlit run app.py                            # demo page: chat on the left, every stage's decision on the right
 python src/pipeline.py --config lookahead --show # the same in a terminal
 ```
 
+The first run also downloads Speak's base model, Qwen2.5-0.5B-Instruct (about 1 GB), from the Hugging Face
+Hub. With the trained Guard in place, four Guard tests fail by design: they state the behaviour we want on
+indirect and negated messages, which the classifier does not reach yet (`docs/guard.md`).
 `docs/demo.md` lists the files each configuration needs and the expected speed.
 
 ## Reproduce everything
@@ -142,7 +147,7 @@ Guard), every `--smoke` mode runs, and the look-ahead pipeline answers with the 
 | Plan | `src/plan.py` (training, test, inference; `--input response` trains the strategy tagger) |
 | Speak | `src/train_speak.py`, `src/speak.py` |
 | Critique | `src/train_critic.py`, `src/critic.py`, `src/tune_lookahead.py`, `src/audit_feedback.py` |
-| The system | `src/pipeline.py` (`Kaki.respond`, terminal chat), `app.py` (Streamlit demo) |
+| The system | `src/pipeline.py` (`Kaki.respond`, terminal chat), `app.py` (Streamlit demo), `src/download_checkpoints.py` (trained models from the release) |
 | Evaluation | `src/generate_outputs.py`, `src/baselines.py`, `src/metrics.py`, `src/compare_configs.py`, `src/perplexity.py`, `src/controllability.py`, `src/ablations.py`, `src/judge.py`, `src/simulate.py`, `src/benchmark.py` |
 | Human evaluation | `src/select_eval_contexts.py`, `configs/eval_contexts.json`, `configs/eval_queries.json`, `src/human_eval_sheet.py`, `src/realism_sheet.py` |
 | Shared | `src/common.py` (JSONL files, the history format), `src/chat_model.py` (local chat model for the simulator and the judge) |
