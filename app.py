@@ -360,7 +360,7 @@ def main():
             state.results.append(result)
             show_reply(result)
 
-    with panel:
+    with panel, st.container(height=520, border=False):  # scrolls on its own, so the chat stays on screen
         st.subheader("How Kaki decided")
         if not state.results:
             st.caption(
