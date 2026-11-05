@@ -78,7 +78,8 @@ that ESConv supporters use often: on the handwritten queries below it answers al
 "I'm sorry to hear that. I've been in a similar situation." Zero-shot Qwen is far from the references and
 writes 53-word replies, often numbered lists of advice; fine-tuning, not model size, is what brings Qwen's
 replies close to ESConv's. The proposal's third hypothesis, that a 0.5B model would match or beat
-fine-tuned BlenderBot-small on these metrics, is not supported.
+fine-tuned BlenderBot-small on these metrics, is not supported on reference overlap. It holds for speed and,
+weakly, for the human ratings below.
 
 Test perplexity of the reference replies (`src/perplexity.py`, Qwen tokens): zero-shot 35.1, history-only
 adapter 14.5, conditioned adapter given the reference emotion and strategy 14.2. BlenderBot-small's is 15.7
@@ -212,7 +213,8 @@ a seeker message, batched greedy decoding; intervals are paired against the plan
 Plan's strategy differs from the reference in 67% of these histories, and with the reference strategy
 the same adapter moves from below direct generation (18.67 in the main table) to 20.28, close to
 BlenderBot-small (20.83); batched decoding scores planning 0.15 lower than the per-turn run, so the
-comparison with direct is approximate. The strategy is what limits planning, not Speak. The emotion barely matters:
+comparison with direct is approximate. This gain is an upper bound: the strategy comes from the very reply it
+is scored against, so a real planner would recover only part of it. The strategy is what limits planning, not Speak. The emotion barely matters:
 Perceive's emotion differs from the reference in 47% of histories, yet correcting it or replacing it with
 a constant changes nothing measurable, so Speak learnt to rely on the history rather than the emotion in
 its prompt.
@@ -240,9 +242,11 @@ it does rate the human replies above look-ahead (-0.09 [-0.17, -0.004]).
 
 ## Human evaluation
 
-Two team members who had not seen any output, YONG Huey and Denzyl NG,
-rated the 76 distinct replies blind (`docs/evaluation.md`): 20 test contexts and 5 handwritten Singlish messages, answered by
-direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. The first rater left one cell
+Two team members rated the 76 distinct replies without knowing which system wrote each one
+(`docs/evaluation.md`). A first round was discarded because the two sheets were 87% identical, too close to
+count as independent, so at least one rater had seen the replies before rating them again. The ratings cover
+20 test contexts and 5 handwritten Singlish messages, answered by
+direct, planning, look-ahead and BlenderBot-small, each reply 1-5 on five criteria. One rater left one cell
 blank and supplied the rating afterwards. Mean over both raters:
 
 | System | Relevance | Acknowledgement | Helpfulness | Fluency | Safety | Mean of five |

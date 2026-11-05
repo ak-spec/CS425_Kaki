@@ -198,8 +198,9 @@ so a context may have only one or two replies to rate, and the key credits a sha
 configuration that wrote it. Showing duplicates would let raters guess which reply came from which system.
 `build` prints how many contexts have a shared reply and how many replies there are to rate.
 
-Raters should not have seen the systems' outputs on these contexts. Two team members who had not looked at
-any outputs rate independently; more raters can be added, and alpha is computed over all of them.
+Raters should not have seen the systems' outputs on these contexts, and they rate independently; more raters
+can be added, and alpha is computed over all of them. In the run reported in `docs/results.md`, a first round was
+discarded because the two sheets were 87% identical, so at least one rater had seen the replies before.
 
 ### Realism of the simulated seekers
 

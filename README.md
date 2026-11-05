@@ -40,8 +40,8 @@ On the ESConv test split (`docs/results.md` has every number, interval and cavea
 
 - Planning and look-ahead do not beat direct generation, on reference metrics or with human raters.
 - The reason is Plan: given the true strategy instead, the same generator gains 2.4 BERTScore points and would beat
-  direct generation (`src/ablations.py`).
-- A Critic trained on seeker ratings ignored the reply (48% on a swap test); a reply-contrast loss fixed this (92%).
+  direct generation, an upper bound because that strategy comes from the reply being scored (`src/ablations.py`).
+- A Critic trained on seeker ratings ignored the reply (48% on a validation swap test); a reply-contrast loss fixed this (91%, and 92% on test).
 - Guard catches explicit risk but misses most indirect and Singlish statements in 60 handwritten probes.
 - A look-ahead turn takes about 1.3 s on one GPU and 9 s on four CPU threads.
 
@@ -72,8 +72,8 @@ want on indirect and negated messages, which the classifier does not reach yet (
 ## Reproduce everything
 
 All training ran on one RTX 3090 (the SCIS GPU cluster); every training script has a `--smoke` mode that runs on a
-few rows on a CPU in minutes. Validation chose every checkpoint, threshold and weight; each test split was scored
-once at the end.
+few rows on a CPU in minutes. Validation chose every checkpoint, threshold and weight; no test result was used to
+choose anything.
 
 **1. Data** (downloads ESConv and the Guard data; `docs/data.md`)
 
