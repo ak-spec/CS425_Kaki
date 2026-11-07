@@ -300,6 +300,8 @@ def main():
     state = st.session_state
     if "turns" not in state:
         state.turns, state.results = [], []
+    if "replying" not in state:
+        state.replying = False
 
     with st.sidebar:
         config = st.radio(
@@ -340,7 +342,14 @@ def main():
         state.loaded = wanted
         kaki = load_kaki(str(args.checkpoints), wanted)
 
-    prompt = st.chat_input("Message Kaki")
+    prompt = st.chat_input("Kaki is replying..." if state.replying else "Message Kaki", disabled=state.replying)
+    if prompt and prompt.strip():
+        # Rerun before inference so the browser receives the disabled chat input
+        # while the (potentially slow) models generate the reply.
+        state.pending_prompt = prompt.strip()
+        state.replying = True
+        st.rerun()
+
     chat, panel = st.columns(2, gap="large")
     with chat, st.container(height=520):
         replies = iter(state.results)
@@ -349,16 +358,21 @@ def main():
                 show_seeker(turn["text"])
             else:
                 show_reply(next(replies))
-        if prompt and prompt.strip():
-            show_seeker(prompt)
-            turns = state.turns + [{"speaker": "seeker", "text": prompt}]
-            with st.spinner("Kaki is replying..."):
-                start = time.perf_counter()
-                out = kaki.respond(turns, config)
-                result = {"output": out, "seconds": time.perf_counter() - start}
-            state.turns = turns + [{"speaker": "supporter", "text": out["reply"]}]
-            state.results.append(result)
-            show_reply(result)
+        if state.replying and state.get("pending_prompt"):
+            pending_prompt = state.pending_prompt
+            show_seeker(pending_prompt)
+            turns = state.turns + [{"speaker": "seeker", "text": pending_prompt}]
+            try:
+                with st.spinner("Kaki is replying..."):
+                    start = time.perf_counter()
+                    out = kaki.respond(turns, config)
+                    result = {"output": out, "seconds": time.perf_counter() - start}
+                state.turns = turns + [{"speaker": "supporter", "text": out["reply"]}]
+                state.results.append(result)
+            finally:
+                state.replying = False
+                del state.pending_prompt
+            st.rerun()
 
     with panel, st.container(height=520, border=False):  # scrolls on its own, so the chat stays on screen
         st.subheader("How Kaki decided")
